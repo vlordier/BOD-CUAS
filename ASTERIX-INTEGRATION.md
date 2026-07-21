@@ -14,7 +14,7 @@ It is an integration profile, not a replacement for the EUROCONTROL category spe
 | CAT-062 | Fused SDPS/system tracks | ingest and publish |
 | CAT-021 | ADS-B target reports for cooperative crewed aircraft | ingest |
 | CAT-004 | Safety-net events when supplied by ATC/SDPS | ingest |
-| CAT-063 | Sensor/SDPS status | ingest |
+| CAT-063 | Sensor/SDPS status | ingest and optional publish |
 | CAT-253 | User-specific remote monitoring/control information; use only under an agreed bilateral UAP | bilateral (optional) |
 
 CAT-033 is not the ADS-B target-report category. The Bordeaux integration uses CAT-021 for ADS-B.
