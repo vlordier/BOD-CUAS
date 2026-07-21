@@ -383,7 +383,189 @@ $$\hat{\alpha}_{sym} = \arg\max_\alpha |R_x^\alpha(\tau)| \quad \text{for } \tau
 
 ---
 
-## 10. Source Files Reference
+## 11. Multi-Modal Sensor Fusion
+
+### 11.1 Architecture
+
+From `furia-sensor-fusion::multi_modal_fusion` — orchestrates fusion across 5 sensor modalities:
+
+| Modality | Position Weight | Velocity Weight | Classification Confidence |
+|----------|----------------|-----------------|--------------------------|
+| Radar | 0.40 | 0.35 | 0.50 (default) |
+| RF Scanner | 0.25 | 0.25 | 0.70 (RF detection) |
+| Acoustic Array | 0.15 | 0.10 | 0.40 (default) |
+| EO/IR Camera | 0.20 | 0.30 | 0.60 (visual classification) |
+| Micro-Doppler Radar | 0.40 | 0.35 | 0.75 (micro-Doppler) |
+
+### 11.2 Fusion Pipeline
+
+1. **Time alignment** — Interpolates measurements to median timestamp within configurable window (default 50ms)
+2. **Covariance intersection** — Fuses state estimates across modalities using CI formula
+3. **Classification fusion** — Weighted voting across modalities for drone type identification
+4. **Track quality** — Computed from modality count, recency, and covariance trace
+
+### 11.3 Fusion Equation
+
+$$P_{fused}^{-1} = \omega \cdot P_1^{-1} + (1-\omega) \cdot P_2^{-1}$$
+
+$$C_{fused} = \frac{\sum_i w_i \cdot c_i}{\sum_i w_i}$$
+
+---
+
+## 12. CBBA Consensus Phase
+
+### 12.1 Algorithm
+
+From `furia-task-allocation::consensus_phase` — implements the full Consensus-Based Bundle Algorithm:
+
+1. **Bundle building** — Each agent greedily selects tasks by descending score
+2. **Bundle sharing** — Agents share bundles with neighbors (adjacency matrix)
+3. **Conflict resolution** — For each task, higher bid wins; equal bids broken by timestamp then agent index
+4. **Convergence detection** — Algorithm converges when all agent scores change below threshold
+
+### 12.2 Consensus Rules
+
+| Condition | Winner |
+|-----------|--------|
+| Higher bid | Higher bid wins |
+| Equal bid, different timestamp | More recent timestamp wins |
+| Equal bid, equal timestamp | Lower agent index wins |
+
+---
+
+## 13. BOIDS Swarm Algorithm
+
+### 13.1 Forces
+
+From `furia-formation-physics::boids` — Craig Reynolds' BOIDS algorithm:
+
+| Force | Weight | Description |
+|-------|--------|-------------|
+| Separation | 1.5 | Steer away from nearby boids (inverse distance, 25m radius) |
+| Alignment | 1.0 | Steer toward average heading of neighbors (100m radius) |
+| Cohesion | 1.0 | Steer toward center of mass of neighbors (100m radius) |
+| Goal-seeking | 0.5 | Steer toward mission goal position |
+
+### 13.2 Update Loop
+
+$$\vec{F} = w_s \cdot \vec{S} + w_a \cdot \vec{A} + w_c \cdot \vec{C} + w_g \cdot \vec{G}$$
+
+$$\vec{v}_{t+1} = \vec{v}_t + \frac{\vec{F}}{m} \cdot \Delta t$$
+
+$$\vec{p}_{t+1} = \vec{p}_t + \vec{v}_{t+1} \cdot \Delta t$$
+
+---
+
+## 14. Bidirectional MAVLink Adapter
+
+### 14.1 Commands
+
+From `adapters/mavlink-adapter::command`:
+
+| Command | MAV_CMD | Parameters |
+|---------|---------|------------|
+| Arm | 400 (ARM_DISARM) | param1=1.0 |
+| Disarm | 400 (ARM_DISARM) | param1=0.0 |
+| Takeoff | 22 (NAV_TAKEOFF) | param7=altitude_m |
+| Land | 21 (NAV_LAND) | — |
+| RTL | 20 (NAV_RETURN_TO_LAUNCH) | — |
+| Guided Goto | 51 (DO_REPOSITION) | param5=lat, param6=lon, param7=alt |
+| Set Mode | 176 (DO_SET_MODE) | param1=mode_number |
+| Set Speed | 178 (DO_CHANGE_SPEED) | param1=speed_mps, param2=-1 |
+| Mission Start | 300 (MISSION_START) | — |
+| Mission Pause | 197 (DO_PAUSE_CONTINUE) | param1=0.0 |
+
+### 14.2 Heartbeat
+
+HEARTBEAT (msg_id=0) with MAV_TYPE_QUADROTOR (2), MAV_AUTOPILOT_ARDUPILOTMEGA (8), base_mode 81, MAV_STATE_ACTIVE (4).
+
+---
+
+## 15. Geofence Enforcement Engine
+
+### 15.1 Fence Types
+
+From `furia-airspace::geofence`:
+
+| Type | Geometry | BOD Application |
+|------|----------|-----------------|
+| Circular | Center + radius_m | CTR (5 NM), TMA (20 NM) |
+| Polygonal | Vertex list | Terminal area, BA 106 fuel depot |
+| AltitudeBand | min_m, max_m | Altitude envelope (SFC–2,500 ft) |
+| Cylindrical | Center + radius + altitude | ILS critical area, approach corridors |
+| RunwayExclusion | Start/end + half_width | Runway 05/23 and 11/29 exclusion zones |
+
+### 15.2 Enforcement Actions
+
+| Severity | Action | Use Case |
+|----------|--------|----------|
+| 0 | None | Monitoring only |
+| 1 | Warning | Approaching boundary |
+| 2 | SpeedLimit | Near protected zone |
+| 3 | AltitudeCap | Altitude violation |
+| 4 | ReturnToLaunch | Runway incursion |
+| 5 | LandImmediately | Critical zone violation |
+
+### 15.3 Breach Prediction
+
+Projects position along velocity vector and checks for future violations within configurable time horizon.
+
+---
+
+## 16. CBF Safety Shield
+
+### 16.1 CBF Types
+
+From `furia-collision-avoidance::control_barrier_function`:
+
+| CBF | $h(x)$ | Application |
+|-----|--------|-------------|
+| Separation | $\|p_i - p_j\| - d_{min}$ | Interceptor separation |
+| Geofence | $R - \|p - p_{center}\|$ | Stay inside boundary |
+| Altitude | $z - z_{min}$, $z_{max} - z$ | Altitude envelope |
+| Runway | $\|p - p_{rwy}\| - d_{rwy}$ | Runway exclusion |
+| Speed | $v_{max} - \|v\|$ | Maximum speed |
+
+### 16.2 QP Safety Filter
+
+$$\min_{u \in \mathbb{R}^3} \frac{1}{2}\|u - u_{nom}\|^2$$
+$$\text{s.t. } L_f h_i + L_g h_i \cdot u + \alpha_i \cdot h_i \geq 0, \quad \forall i$$
+
+---
+
+## 17. ORCA Multi-Agent Avoidance
+
+### 17.1 Half-Plane Constraints
+
+From `furia-collision-avoidance::optimal_reciprocal_collision_avoidance`:
+
+$$ORCA_{i|j} = \{v \mid (v - (v_i^{opt} + v_j^{opt})/2) \cdot n \geq 0\}$$
+
+### 17.2 Solver
+
+Linear programming in 2D: finds closest velocity to preferred velocity within intersection of all ORCA half-planes and max speed constraint.
+
+---
+
+## 18. Intercept Guidance
+
+### 18.1 Guidance Laws
+
+From `furia-intercept-guidance`:
+
+| Law | Equation | Use Case |
+|-----|----------|----------|
+| PN | $a_c = N \cdot v_c \cdot \dot{\lambda}$ | Standard intercept |
+| APN | $a_c = N \cdot v_c \cdot \dot{\lambda} + \frac{N}{2} \cdot a_T$ | Evading targets |
+| Pure Pursuit | $a_c = k \cdot (\psi_T - \psi_I)$ | Short-range intercept |
+
+### 18.2 Intercept Point
+
+Solves quadratic for simultaneous arrival: $\|p_T + v_T \cdot t - p_I\| = v_I \cdot t$
+
+---
+
+## 19. Source Files Reference
 
 | File | Content |
 |------|---------|
@@ -413,3 +595,11 @@ $$\hat{\alpha}_{sym} = \arg\max_\alpha |R_x^\alpha(\tau)| \quad \text{for } \tau
 | `services/counter-uas-director/src/abort_rules.rs` | Engagement abort rules |
 | `services/counter-uas-director/src/fsm/` | F2T2EA kill-chain FSM |
 | `services/counter-uas-director/src/physics_engine.rs` | Engagement physics |
+| `furia-sensor-fusion/src/multi_modal_fusion.rs` | Multi-modal fusion orchestrator (NEW) |
+| `furia-task-allocation/src/consensus_phase.rs` | Full CBBA consensus phase (NEW) |
+| `furia-formation-physics/src/boids.rs` | BOIDS swarm algorithm (NEW) |
+| `adapters/mavlink-adapter/src/command.rs` | Bidirectional MAVLink commands (NEW) |
+| `furia-airspace/src/geofence.rs` | Geofence enforcement engine (NEW) |
+| `furia-collision-avoidance/src/control_barrier_function.rs` | CBF safety shield (NEW) |
+| `furia-collision-avoidance/src/optimal_reciprocal_collision_avoidance.rs` | ORCA multi-agent avoidance (NEW) |
+| `furia-intercept-guidance/src/lib.rs` | Intercept guidance PN/APN/pursuit (NEW) |
