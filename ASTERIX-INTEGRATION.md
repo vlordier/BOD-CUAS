@@ -10,7 +10,7 @@ It is an integration profile, not a replacement for the EUROCONTROL category spe
 |---|---|---|
 | CAT-129 | Cooperative UAS identification reports, including UAS identity and position | ingest and optional publish |
 | CAT-015 | Independent non-cooperative surveillance target reports | ingest and publish |
-| CAT-016 | INCS sensor/configuration metadata paired with CAT-015; not a target-report stream | ingest |
+| CAT-016 | INCS sensor/configuration metadata paired with CAT-015; not a target-report stream | ingest and optional publish |
 | CAT-062 | Fused SDPS/system tracks | ingest and publish |
 | CAT-021 | ADS-B target reports for cooperative crewed aircraft | ingest |
 | CAT-004 | Safety-net events when supplied by ATC/SDPS | ingest |
