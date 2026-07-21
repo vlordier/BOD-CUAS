@@ -1,0 +1,34 @@
+{
+  "contract": "furia.provider-capabilities",
+  "version": "1.0.0",
+  "providerId": "bod-cuas",
+  "providerKind": "scenario-provider",
+  "health": "healthy",
+  "capabilities": [
+    {
+      "id": "bod-surveillance-feed",
+      "kind": "sensor",
+      "capabilityIds": [
+        "surveillance.track"
+      ],
+      "authority": "observe",
+      "subjects": [
+        "scenario.track.*",
+        "scenario.status"
+      ],
+      "commands": []
+    },
+    {
+      "id": "bod-cuas-recommendation",
+      "kind": "effector",
+      "capabilityIds": [
+        "action.cuas"
+      ],
+      "authority": "recommend",
+      "subjects": [],
+      "commands": [
+        "cuas.recommend"
+      ]
+    }
+  ]
+}

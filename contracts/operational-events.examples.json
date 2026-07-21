@@ -1,0 +1,17 @@
+{
+  "scenarioTrack": {
+    "id": "bod-track-001",
+    "lat": 44.8283,
+    "lon": -0.7156,
+    "altitude_m": 120.0,
+    "speed_kph": 54.0,
+    "heading_deg": 230.0,
+    "status": "suspect"
+  },
+  "scenarioStatus": {
+    "id": "bod-cuas",
+    "state": "running",
+    "tick": 0,
+    "elapsed_sec": 0
+  }
+}
