@@ -603,3 +603,6 @@ Solves quadratic for simultaneous arrival: $\|p_T + v_T \cdot t - p_I\| = v_I \c
 | `furia-collision-avoidance/src/control_barrier_function.rs` | CBF safety shield (NEW) |
 | `furia-collision-avoidance/src/optimal_reciprocal_collision_avoidance.rs` | ORCA multi-agent avoidance (NEW) |
 | `furia-intercept-guidance/src/lib.rs` | Intercept guidance PN/APN/pursuit (NEW) |
+| `services/counter-uas-director/src/abort_rules.rs` | Airport-specific abort rules (7 new types) |
+| `services/counter-uas-director/src/fsm/gates.rs` | Airport engagement gates (protected zone check) |
+| `services/counter-uas-director/src/fsm/handlers.rs` | AbortContext with airport fields |
