@@ -610,6 +610,82 @@ Solves quadratic for simultaneous arrival: $\|p_T + v_T \cdot t - p_I\| = v_I \c
 
 ---
 
+## 19. C-UAS Engagement Pipeline
+
+The `counter-uas-director` service in `furia-core` contains a **pipeline orchestrator** (`services/counter-uas-director/src/pipeline.rs`) that chains all C-UAS primitives into a single 10 Hz tick loop:
+
+```
+┌─────────────┐    ┌──────────────┐    ┌──────────┐    ┌───────────────┐
+│ Multi-modal │───▶│   Threat     │───▶│   CBBA   │───▶│   Intercept   │
+│   Fusion    │    │ Assessment   │    │Allocation│    │   Guidance    │
+└─────────────┘    └──────────────┘    └──────────┘    └───────┬───────┘
+                                                               │
+                                                               ▼
+┌─────────────┐    ┌──────────────┐    ┌──────────┐    ┌───────────────┐
+│  Geofence   │◀───│     CBF      │◀───│   ORCA   │◀───│  Interceptor  │
+│ Enforcement │    │ Safety Filter│    │Collision │    │  Assignment   │
+└─────────────┘    └──────────────┘    │Avoidance │    └───────────────┘
+                                       └──────────┘
+```
+
+### 19.1 Pipeline Steps
+
+| Step | Crate | Key Types | Description |
+|------|-------|-----------|-------------|
+| 1. Fusion | `furia-sensor-fusion` | `MultiModalFusionEngine`, `SensorModality`, `ModalityMeasurement` | Ingests radar, RF scanner, and acoustic tracks; produces fused position/velocity/covariance |
+| 2. Threat | (inline) | `ThreatLevel` (Low/Medium/High/Critical) | Computes threat score from speed, altitude, and airport proximity (weighted: 20% speed, 20% altitude, 60% proximity) |
+| 3. CBBA | `furia-task-allocation` | `CBBAConfig`, `cbba_full_allocation` | Assigns interceptors to threats using consensus-based bundle algorithm |
+| 4. Intercept | `furia-intercept-guidance` | `InterceptGuidance`, `GuidanceLaw::ProportionalNavigation` | Computes PN guidance commands for each interceptor-threat pair |
+| 5. ORCA | `furia-collision-avoidance` | `OrcaSolver`, `OrcaHalfPlane` | Computes collision-free velocities between interceptors |
+| 6. CBF | `furia-collision-avoidance` | `CbfSafetyFilter`, `geofence_cbf`, `separation_cbf`, `altitude_envelope_cbf`, `speed_limit_cbf` | Safety filter: geofence, separation, altitude envelope, speed limit |
+| 7. Geofence | `furia-airspace` | `GeofenceEngine`, `GeofenceFence` | Checks all tracks against airport geofences (CTR, runways, ILS, fuel storage, terminal) |
+
+### 19.2 Bordeaux Airport Geofences (built into pipeline)
+
+The pipeline constructor pre-loads 6 geofences for LFBD:
+
+| Fence ID | Type | Parameters | Action |
+|----------|------|------------|--------|
+| `bod-ctr` | Circular | Center [44.828333, -0.715556], radius 9260 m | ReturnToLaunch |
+| `bod-rwy05` | RunwayExclusion | Start [44.83, -0.71], End [44.82, -0.70], half-width 150 m | LandImmediately |
+| `bod-rwy11` | RunwayExclusion | Start [44.83, -0.72], End [44.82, -0.71], half-width 150 m | LandImmediately |
+| `bod-ils05` | Cylindrical | Center [44.83, -0.71], radius 300 m, alt 0–600 m | LandImmediately |
+| `bod-fuel` | Circular | Center [44.82, -0.72], radius 200 m | ReturnToLaunch |
+| `bod-terminal` | Circular | Center [44.83, -0.71], radius 150 m | ReturnToLaunch |
+
+### 19.3 Threat Score Formula
+
+```
+threat = 0.20 × speed_score + 0.20 × alt_score + 0.60 × prox_score
+
+speed_score = min(speed / 500, 1.0)           // 0–500 m/s → 0–1
+alt_score   = clamp(1.0 - alt / 5000, 0, 1)   // lower = more threatening
+prox_score  = max(1.0 - dist_km / 10, 0)      // closer to airport = higher
+```
+
+### 19.4 Pipeline Configuration
+
+```rust
+CuasPipelineConfig {
+    fusion_config: MultiModalFusionConfig::default(),
+    cbba_config: CBBAConfig::default(),
+    cbf_alpha: 2.0,
+    orca_time_horizon: 10.0,       // seconds
+    orca_time_step: 0.1,           // seconds
+    orca_agent_radius: 1.0,        // meters
+    orca_max_speed: 20.0,          // m/s
+    pn_nav_constant: 3.0,          // PN gain
+    max_lateral_accel: 50.0,       // m/s²
+    tick_hz: 10,                   // pipeline frequency
+}
+```
+
+### 19.5 Source File
+
+`services/counter-uas-director/src/pipeline.rs` in `furia-core` — 345 lines including 7 unit tests.
+
+---
+
 ## 20. S1 Integration Bridge
 
 ### 20.1 Architecture
