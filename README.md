@@ -606,3 +606,45 @@ Solves quadratic for simultaneous arrival: $\|p_T + v_T \cdot t - p_I\| = v_I \c
 | `services/counter-uas-director/src/abort_rules.rs` | Airport-specific abort rules (7 new types) |
 | `services/counter-uas-director/src/fsm/gates.rs` | Airport engagement gates (protected zone check) |
 | `services/counter-uas-director/src/fsm/handlers.rs` | AbortContext with airport fields |
+| `s1/src/furia_bridge.rs` | S1 integration bridge (airport zones, CBF, intercept, fusion, CBBA, MAVLink, BOD presets) |
+
+---
+
+## 20. S1 Integration Bridge
+
+### 20.1 Architecture
+
+The `s1::furia_bridge` module (feature-gated behind `furia-bridge`) connects furia-core's C-UAS primitives into S1's verified swarm runtime:
+
+| furia-core Primitive | S1 Integration Point |
+|---------------------|---------------------|
+| Airport zone types (8 kinds) | `AirportZoneKind` enum → `ObstacleGrid::mark_world(Occupancy::NoFly)` |
+| Runway exclusion CBF | `runway_exclusion_barrier()` → `extended_barrier_check()` |
+| Geofence boundary CBF | `extended_barrier_check()` → geofence radius check |
+| Intercept guidance | `intercept_to_guidance()` → `GuidanceCommand` |
+| Multi-modal fusion | `ingest_fused_track()` → `SensorFusionManager::ingest_reading()` |
+| CBBA consensus | `apply_cbba_allocations()` → `Task::bid()` + `Task::assign()` |
+| MAVLink commands | `encode_bridge_command()` → `MavMessage` |
+| BOD presets | `BodPresets::all_zones()` — 8 zone definitions |
+
+### 20.2 Bordeaux Airport Presets (S1 coordinate frame, mm)
+
+```
+CTR:                    5 NM radius (9,260,000 mm), SFC–2,500 ft (762,000 mm)
+Runway 05/23:           3,100m × 300m, heading 46° / 226°
+Runway 11/29:           2,415m × 300m, heading 114° / 294°
+ILS critical (RWY 05):  300m × 600m from threshold
+Approach corridor:      500m wide, 10 km long
+Fuel storage (BA 106):  200m radius
+Passenger terminal:     150m radius
+```
+
+### 20.3 Integration Tests (8 tests)
+
+- Airport zone kind values
+- Runway exclusion barrier (inside + outside)
+- Intercept to guidance conversion
+- BOD presets all zones
+- Push airport zones to obstacle grid
+- Extended barrier check
+- MAVLink command encoding (arm, takeoff)
