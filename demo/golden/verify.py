@@ -17,6 +17,8 @@ AUTHORIZATION_ID = "bod-demo-auth-4660"
 ACTIVE_CONTRACT_ID: str | None = None
 
 EXPECTED = {
+    "emitter_localization": False,
+    "threat_origin": False,
     "risk_event": False,
     "incident_event": False,
     "sensor_degradation_visible": False,
@@ -90,10 +92,60 @@ def valid_delegation(payload: dict) -> bool:
     )
 
 
+def valid_geo_estimate(estimate: dict | None) -> bool:
+    if not isinstance(estimate, dict):
+        return False
+    major = estimate.get("uncertainty_major_mm")
+    minor = estimate.get("uncertainty_minor_mm")
+    confidence = estimate.get("confidence_permille")
+    return (
+        isinstance(major, int)
+        and isinstance(minor, int)
+        and major >= minor > 0
+        and isinstance(confidence, int)
+        and 0 <= confidence <= 1000
+        and isinstance(estimate.get("latitude_e7"), int)
+        and isinstance(estimate.get("longitude_e7"), int)
+    )
+
+
 def observe(subject: str, payload: dict) -> None:
     global EVENT_INDEX, ACTIVE_CONTRACT_ID
     EVENT_INDEX += 1
-    if subject == "cuas.risk.protected_volume":
+    if subject == "cuas.emitter.localization":
+        evidence = payload.get("evidence") or []
+        methods = set(payload.get("methods") or [])
+        mark(
+            "emitter_localization",
+            payload.get("associated_track_id") == ROGUE_TRACK_ID
+            and payload.get("emitter_id") == "RF-12"
+            and valid_geo_estimate(payload.get("estimate"))
+            and "fused" in methods
+            and any(item.get("kind") == "rf_bearing" for item in evidence if isinstance(item, dict)),
+        )
+    elif subject == "cuas.threat.origin":
+        hypotheses = payload.get("launch_hypotheses") or []
+        probability_mass = sum(
+            item.get("probability_permille", 0)
+            for item in hypotheses
+            if isinstance(item, dict)
+        )
+        mark(
+            "threat_origin",
+            payload.get("track_id") == ROGUE_TRACK_ID
+            and payload.get("associated_emitter_id") == "RF-12"
+            and isinstance(payload.get("inference_version"), str)
+            and bool(payload.get("inference_version"))
+            and len(hypotheses) >= 1
+            and probability_mass <= 1000
+            and valid_geo_estimate(payload.get("controller_estimate"))
+            and all(
+                valid_geo_estimate(item.get("estimate"))
+                for item in hypotheses
+                if isinstance(item, dict)
+            ),
+        )
+    elif subject == "cuas.risk.protected_volume":
         intersections = payload.get("intersections") or []
         horizons = {item.get("horizon_sec") for item in intersections if isinstance(item, dict)}
         core_risk_valid = (
@@ -106,7 +158,10 @@ def observe(subject: str, payload: dict) -> None:
             and payload.get("authorized") is None
         )
         mark("risk_event", core_risk_valid)
-        mark("sensor_degradation_visible", core_risk_valid and payload.get("sensor_coverage_degraded") is True)
+        mark(
+            "sensor_degradation_visible",
+            core_risk_valid and payload.get("sensor_coverage_degraded") is True,
+        )
     elif subject == "cuas.incident.state":
         mark(
             "incident_event",
@@ -127,7 +182,8 @@ def observe(subject: str, payload: dict) -> None:
     elif subject == "furia.s1.execution-progress":
         mark(
             "delegation_accepted",
-            payload.get("mission_id") == MISSION_ID and payload.get("phase") in {"accepted", "active"},
+            payload.get("mission_id") == MISSION_ID
+            and payload.get("phase") in {"accepted", "active"},
         )
     elif subject == "cuas.execution.evidence":
         common_valid = (
@@ -168,10 +224,17 @@ def observe(subject: str, payload: dict) -> None:
             and payload.get("source") == "core-safety-policy",
         )
     elif subject == "swarm.command.result.abort":
-        mark("abort_result", payload.get("mission_id") == MISSION_ID and payload.get("status") == "executed")
+        mark(
+            "abort_result",
+            payload.get("mission_id") == MISSION_ID
+            and payload.get("status") == "executed",
+        )
     elif subject == "swarm.fsm.state":
         state = payload.get("state")
-        mark("executing", payload.get("mission_id") == MISSION_ID and state == "ExecutingOpord")
+        mark(
+            "executing",
+            payload.get("mission_id") == MISSION_ID and state == "ExecutingOpord",
+        )
         mark(
             "aborted",
             payload.get("mission_id") == MISSION_ID
@@ -182,6 +245,8 @@ def observe(subject: str, payload: dict) -> None:
 
 def assert_causal_order() -> None:
     required_before = [
+        ("emitter_localization", "delegation_emitted"),
+        ("threat_origin", "delegation_emitted"),
         ("risk_event", "delegation_emitted"),
         ("incident_event", "delegation_emitted"),
         ("delegation_emitted", "delegation_accepted"),
@@ -223,6 +288,8 @@ def main() -> None:
             b"SUB cuas.execution.evidence 7\r\n"
             b"SUB cuas.risk.protected_volume 8\r\n"
             b"SUB cuas.incident.state 9\r\n"
+            b"SUB cuas.emitter.localization 10\r\n"
+            b"SUB cuas.threat.origin 11\r\n"
             b"PING\r\n"
         )
 
