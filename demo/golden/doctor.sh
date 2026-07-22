@@ -15,6 +15,26 @@ check_cmd() {
   local name="$1" cmd="$2"
   if command -v "$cmd" >/dev/null 2>&1; then printf '%-24s ✅ %s\n' "$name" "$cmd"; else printf '%-24s ❌ %s\n' "$name" "$cmd"; fail=1; fi
 }
+check_port_free() {
+  local port="$1" label="$2"
+  if python3 - "$port" <<'PY'
+import socket, sys
+port = int(sys.argv[1])
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    s.bind(("127.0.0.1", port))
+except OSError:
+    raise SystemExit(1)
+finally:
+    s.close()
+PY
+  then
+    printf '%-24s ✅ %s\n' "$label" "$port"
+  else
+    printf '%-24s ❌ %s already in use\n' "$label" "$port"
+    fail=1
+  fi
+}
 printf 'Furia Bordeaux golden demo doctor\n\n'
 check_dir 'BOD-CUAS' "$ROOT/BOD-CUAS"
 check_dir 'furia-core' "$ROOT/furia-core"
@@ -31,6 +51,16 @@ check_cmd 'pnpm' pnpm
 check_cmd 'python3' python3
 check_cmd 'curl' curl
 if command -v docker >/dev/null 2>&1; then printf '%-24s ✅ docker\n' 'container runtime'; elif command -v nats-server >/dev/null 2>&1; then printf '%-24s ✅ nats-server\n' 'NATS runtime'; else printf '%-24s ❌ docker or nats-server\n' 'NATS runtime'; fail=1; fi
+
+if command -v python3 >/dev/null 2>&1; then
+  printf '\nRequired ports\n'
+  check_port_free 4222 'NATS TCP'
+  check_port_free 9222 'NATS WebSocket'
+  check_port_free 8080 'ATAK dev server'
+  check_port_free 3000 'Furia Core'
+  check_port_free 3227 'S1 sim server'
+  check_port_free 5173 'Furia C2'
+fi
 printf '\n'
 if [[ $fail -eq 0 ]]; then echo 'Golden demo prerequisites look ready.'; else echo 'Golden demo prerequisites are incomplete.'; fi
 exit "$fail"
