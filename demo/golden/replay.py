@@ -15,8 +15,16 @@ EVENTS = [
     (0.0, "scenario.status", {"id": "bod-cuas-golden", "state": "running", "tick": 0, "elapsed_sec": 0}),
     (20.0, "operator.timeline", {"event": "rogue_uas_detected", "track_id": "uas-rogue-042", "severity": "high"}),
     (30.0, "safety.runway_incursion_predicted", {"track_id": "uas-rogue-042", "runway": "05/23", "eta_s": 37}),
-    (35.0, "swarm.intent.submit", {"scenario_id": "perimeter_defense_fob", "intent": "Counter-UAS intercept and contain rogue UAS approaching Bordeaux runway 05/23"}),
-    (45.0, "operator.action.authorized", {"action": "intercept", "track_id": "uas-rogue-042", "operator": "demo-operator", "authorized": True}),
+    # Core is the authority boundary. This named authorization is consumed by
+    # counter-uas-director, which emits the bounded/versioned S1 delegation.
+    # The replay never publishes a free-text S1 intent or a mission delegation directly.
+    (35.0, "operator.action.authorized", {
+        "action": "intercept",
+        "track_id": "uas-rogue-042",
+        "operator": "demo-operator",
+        "authorization_id": "bod-demo-auth-042",
+        "authorized": True,
+    }),
     # This is deliberately the only abort stimulus. Core policy converts this
     # safety evidence into the canonical swarm.command.abort command.
     (80.0, "safety.civilian_aircraft_conflict", {
