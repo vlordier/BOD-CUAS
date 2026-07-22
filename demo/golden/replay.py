@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 NATS_URL = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
 SPEED = float(os.environ.get("DEMO_SPEED", "1.0"))
 ASTERIX_SUBJECT = "surveillance.asterix.record"
+HEALTH_SUBJECT = "s1.sim.execution-health"
 MISSION_ID = "perimeter_defense_fob"
 ROGUE_TRACK_ID = "4660"
 
@@ -82,6 +83,8 @@ EVENTS = [
     *rogue_kinematic_events(),
     degraded_sensor_event(),
     (35.0, "operator.action.authorized", {"action": "intercept", "track_id": ROGUE_TRACK_ID, "operator": "demo-operator", "authorization_id": "bod-demo-auth-4660", "authorized": True}),
+    (50.0, HEALTH_SUBJECT, {"mission_id": MISSION_ID, "comms_available": False, "navigation_safe": True, "authority_valid": True}),
+    (60.0, HEALTH_SUBJECT, {"mission_id": MISSION_ID, "comms_available": True, "navigation_safe": True, "authority_valid": True}),
     (80.0, "safety.civilian_aircraft_conflict", {"mission_id": MISSION_ID, "flight_id": "AFR762", "track_id": ROGUE_TRACK_ID, "policy": "BOD-RWY-FRATRICIDE-003"}),
     (95.0, "scenario.status", {"id": "bod-cuas-golden", "state": "complete", "tick": 95, "elapsed_sec": 95}),
 ]
@@ -116,6 +119,11 @@ def main() -> None:
                     stamp_cat015_time_of_day(payload["record"], now_ms)
             elif subject.startswith("surveillance.origin."):
                 payload["observed_at_ms"] = now_ms
+            elif subject == HEALTH_SUBJECT:
+                # Health injection carries fresh local track timing; S1 still evaluates
+                # the active delegation's maximum track-age and authority bounds.
+                payload["observed_at_ms"] = now_ms
+                payload["track_observed_at_ms"] = now_ms
             publish(sock, subject, payload)
             sock.sendall(b"PING\r\n")
             _ = sock.recv(4096)
