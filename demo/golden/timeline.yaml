@@ -1,43 +1,146 @@
-version: 1
+version: 2
 scenario: bod-cuas-golden
 seed: 42
 clock: deterministic
+protected_volumes: ./protected-volumes.yaml
+acceptance_metrics:
+  reliable_decision_time_s_min: 30
+  track_continuity_pct_min: 95
+  stale_track_max_ms: 5000
+  require_sensor_degradation_visibility: true
+  require_safe_recovery_evidence: true
 steps:
   - at_s: 0
     id: scenario-start
     event: scenario.started
+
   - at_s: 5
-    id: authorized-uas
-    event: surveillance.authorized_uas
+    id: authorized-inspection-uas
+    event: surveillance.cooperative_uas
     track_id: uas-authorized-01
+    identity: "uas:FR:DJI:M30:010203"
+    expected_authorization: authorized
+    expected_threat_state: unknown
+    expected_recommendation: none
+
+  - at_s: 10
+    id: unknown-cooperative-uas
+    event: surveillance.cooperative_uas
+    track_id: uas-unknown-01
+    identity: "uas:FR:UNKNOWN:000001"
+    expected_authorization: unknown
+    expected_threat_state: investigate
+    expected_recommendation: monitor
+
+  - at_s: 18
+    id: expired-known-uas
+    event: surveillance.cooperative_uas
+    track_id: uas-expired-01
+    identity: "uas:FR:DJI:M30:EXPIRED"
+    expected_authorization: unauthorized
+    expected_threat_state: unauthorized
+
   - at_s: 20
     id: rogue-detected
     event: surveillance.noncooperative_uas
     track_id: uas-rogue-042
+    sensors: [radar-low-altitude, eo-ir]
+    expected_threat_state: investigate
+
+  - at_s: 25
+    id: rf-silent-confirmation
+    event: surveillance.noncooperative_uas.confirmed
+    track_id: uas-rogue-042
+    rf_control_link_detected: false
+    sensors: [radar-low-altitude, eo-ir]
+    assertion: detection_must_not_depend_on_rf
+
   - at_s: 30
-    id: runway-risk
-    event: cuas.runway_incursion_predicted
-    runway: "05/23"
-    eta_s: 37
+    id: runway-risk-60s
+    event: cuas.risk.protected_volume
+    track_id: uas-rogue-042
+    volume_id: approach-rwy23
+    runway_or_sector: RWY23
+    horizon_sec: 60
+    predicted_entry_in_ms: 37000
+    expected_threat_state: credible_threat
+    expected_recommendation: protect_volume
+
+  - at_s: 32
+    id: sensor-degraded
+    event: surveillance.sensor.status
+    sensor: radar-low-altitude
+    status: degraded
+    assertion: threat_must_not_clear_from_sensor_loss_alone
+    expected_sensor_coverage_degraded: true
+
   - at_s: 35
     id: plan-ready
     event: swarm.plan.ready
     interceptors: 2
+    authority: recommend
+    expected_direct_s1_dispatch: false
+
+  - at_s: 40
+    id: incident-ack-required
+    event: cuas.incident.state
+    incident_id: bod-cuas-001
+    operator_acknowledgement_required: true
+    mitigation_authorized: false
+    expected_recommendation: restrict_affected_runway_or_sector
+
   - at_s: 45
-    id: operator-authorized
+    id: operator-authorized-bounded-response
     event: operator.action.authorized
-    action: intercept
+    action: bounded_intercept_shadow
+    decision_authority: exercise-authority
+    assertion: named_authority_required
+
   - at_s: 50
     id: swarm-execute
     event: swarm.execution.started
+    expected_chain: core_delegation_to_s1
+
+  - at_s: 62
+    id: second-rogue
+    event: surveillance.noncooperative_uas
+    track_id: uas-rogue-043
+    assertion: multiple_tracks_remain_distinct
+
+  - at_s: 70
+    id: s1-comms-degraded
+    event: s1.execution.degraded
+    mode: degraded_communications
+    assertion: continuation_bounded_by_contract_expiry
+
   - at_s: 80
     id: civilian-conflict
     event: safety.civilian_aircraft_conflict
     flight_id: AFR762
+    protected_volume: moving-aircraft-AFR762
+    expected_threat_state: immediate_flight_safety_risk
+
   - at_s: 81
-    id: automatic-abort
+    id: automatic-safety-abort
     event: swarm.execution.aborted
     policy: BOD-RWY-FRATRICIDE-003
+    assertion: civilian_protection_overrides_intercept
+
+  - at_s: 88
+    id: safe-recovery
+    event: s1.execution.evidence
+    degraded_mode: safety_hold
+    rejection_reason: safety_invariant_unavailable
+    assertion: evidence_export_required
+
   - at_s: 95
+    id: incident-resolved
+    event: cuas.incident.state
+    incident_id: bod-cuas-001
+    expected_threat_state: resolved
+    mitigation_authorized: false
+    audit_reason: safe-recovery-confirmed
+
+  - at_s: 100
     id: scenario-complete
     event: scenario.completed
