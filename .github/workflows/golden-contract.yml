@@ -1,0 +1,39 @@
+name: Bordeaux Golden Contract
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Python syntax
+        run: |
+          python -m py_compile demo/golden/replay.py demo/golden/verify.py
+      - name: Enforce canonical authority path
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -q '"swarm.intent.submit"' demo/golden/replay.py
+          ! grep -q '"furia.s1.mission-delegation"[[:space:]]*,' demo/golden/replay.py
+          grep -q '"operator.action.authorized"' demo/golden/replay.py
+          grep -q '"authorization_id": "bod-demo-auth-042"' demo/golden/replay.py
+          grep -q '"safety.civilian_aircraft_conflict"' demo/golden/replay.py
+          grep -q 'SUB furia.s1.mission-delegation' demo/golden/verify.py
+          grep -q 'SUB furia.s1.execution-progress' demo/golden/verify.py
+          grep -q 'SUB swarm.command.abort' demo/golden/verify.py
+          grep -q 'SUB swarm.command.result.abort' demo/golden/verify.py
+          grep -q 'Aborted' demo/golden/verify.py
+          grep -q 'SafeHold' demo/golden/verify.py
+      - name: Verify no direct abort injection
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -q '"swarm.command.abort"' demo/golden/replay.py
+          ! grep -q '"operator.action.abort"' demo/golden/replay.py
