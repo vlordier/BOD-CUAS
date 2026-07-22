@@ -17,8 +17,14 @@ EVENTS = [
     (30.0, "safety.runway_incursion_predicted", {"track_id": "uas-rogue-042", "runway": "05/23", "eta_s": 37}),
     (35.0, "swarm.intent.submit", {"scenario_id": "perimeter_defense_fob", "intent": "Counter-UAS intercept and contain rogue UAS approaching Bordeaux runway 05/23"}),
     (45.0, "operator.action.authorized", {"action": "intercept", "track_id": "uas-rogue-042", "operator": "demo-operator", "authorized": True}),
-    (80.0, "safety.civilian_aircraft_conflict", {"flight_id": "AFR762", "track_id": "uas-rogue-042", "policy": "BOD-RWY-FRATRICIDE-003"}),
-    (81.0, "operator.action.abort", {"action": "intercept", "reason": "civilian_aircraft_conflict", "policy": "BOD-RWY-FRATRICIDE-003"}),
+    # This is deliberately the only abort stimulus. Core policy converts this
+    # safety evidence into the canonical swarm.command.abort command.
+    (80.0, "safety.civilian_aircraft_conflict", {
+        "mission_id": "perimeter_defense_fob",
+        "flight_id": "AFR762",
+        "track_id": "uas-rogue-042",
+        "policy": "BOD-RWY-FRATRICIDE-003",
+    }),
     (95.0, "scenario.status", {"id": "bod-cuas-golden", "state": "complete", "tick": 95, "elapsed_sec": 95}),
 ]
 
