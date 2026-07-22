@@ -28,6 +28,15 @@ EXPECTED = {
     "abort_result": False,
     "aborted": False,
 }
+FIRST_SEEN: dict[str, int] = {}
+EVENT_INDEX = 0
+
+
+def mark(name: str, valid: bool) -> None:
+    if not valid:
+        return
+    EXPECTED[name] = True
+    FIRST_SEEN.setdefault(name, EVENT_INDEX)
 
 
 def read_line(sock: socket.socket, buf: bytearray) -> bytes:
@@ -78,6 +87,8 @@ def valid_delegation(payload: dict) -> bool:
 
 
 def observe(subject: str, payload: dict) -> None:
+    global EVENT_INDEX
+    EVENT_INDEX += 1
     if subject == "cuas.risk.protected_volume":
         intersections = payload.get("intersections") or []
         horizons = {item.get("horizon_sec") for item in intersections if isinstance(item, dict)}
@@ -89,30 +100,34 @@ def observe(subject: str, payload: dict) -> None:
             and {60, 120}.issubset(horizons)
             and payload.get("authorized") is False
         )
-        EXPECTED["risk_event"] = EXPECTED["risk_event"] or core_risk_valid
-        if core_risk_valid and payload.get("sensor_coverage_degraded") is True:
-            EXPECTED["sensor_degradation_visible"] = True
+        mark("risk_event", core_risk_valid)
+        mark("sensor_degradation_visible", core_risk_valid and payload.get("sensor_coverage_degraded") is True)
     elif subject == "cuas.incident.state":
-        EXPECTED["incident_event"] = EXPECTED["incident_event"] or (
+        mark(
+            "incident_event",
             payload.get("primary_track_id") == ROGUE_TRACK_ID
             and payload.get("threat_state") == "credible_threat"
             and payload.get("recommendation") == "restrict_affected_runway_or_sector"
             and payload.get("operator_acknowledgement_required") is True
             and payload.get("mitigation_authorized") is False
-            and payload.get("decision_authority") is None
+            and payload.get("decision_authority") is None,
         )
     elif subject == "furia.s1.mission-delegation":
-        EXPECTED["delegation_emitted"] = valid_delegation(payload)
+        mark("delegation_emitted", valid_delegation(payload))
     elif subject == "cuas.mission.delegation":
-        EXPECTED["delegation_projected"] = valid_delegation(payload)
+        mark("delegation_projected", valid_delegation(payload))
     elif subject == "furia.s1.execution-progress":
-        if payload.get("mission_id") == MISSION_ID and payload.get("phase") in {"accepted", "active"}:
-            EXPECTED["delegation_accepted"] = True
+        mark(
+            "delegation_accepted",
+            payload.get("mission_id") == MISSION_ID and payload.get("phase") in {"accepted", "active"},
+        )
     elif subject == "cuas.execution.evidence":
-        EXPECTED["execution_evidence"] = EXPECTED["execution_evidence"] or (
+        mark(
+            "execution_evidence",
             payload.get("plan_revision") == 1
             and payload.get("state") in {"accepted", "active", "safe_hold", "aborted"}
-            and payload.get("degraded_mode") in {
+            and payload.get("degraded_mode")
+            in {
                 "normal",
                 "stale_remote_tracks",
                 "degraded_navigation",
@@ -124,24 +139,49 @@ def observe(subject: str, payload: dict) -> None:
             and isinstance(payload.get("contract_remaining_ms"), int)
             and payload.get("contract_remaining_ms", -1) >= 0
             and isinstance(payload.get("track_age_ms"), int)
-            and payload.get("track_age_ms", -1) >= 0
+            and payload.get("track_age_ms", -1) >= 0,
         )
     elif subject == "swarm.command.abort":
-        EXPECTED["abort_command"] = (
+        mark(
+            "abort_command",
             payload.get("version") == "1.0.0"
             and payload.get("action") == "abort"
             and payload.get("mission_id") == MISSION_ID
             and payload.get("policy_id") == "BOD-RWY-FRATRICIDE-003"
-            and payload.get("source") == "core-safety-policy"
+            and payload.get("source") == "core-safety-policy",
         )
     elif subject == "swarm.command.result.abort":
-        EXPECTED["abort_result"] = payload.get("mission_id") == MISSION_ID and payload.get("status") == "executed"
+        mark("abort_result", payload.get("mission_id") == MISSION_ID and payload.get("status") == "executed")
     elif subject == "swarm.fsm.state":
         state = payload.get("state")
-        if payload.get("mission_id") == MISSION_ID and state == "ExecutingOpord":
-            EXPECTED["executing"] = True
-        if payload.get("mission_id") == MISSION_ID and state == "Aborted" and payload.get("phase_line") == "SafeHold":
-            EXPECTED["aborted"] = True
+        mark("executing", payload.get("mission_id") == MISSION_ID and state == "ExecutingOpord")
+        mark(
+            "aborted",
+            payload.get("mission_id") == MISSION_ID
+            and state == "Aborted"
+            and payload.get("phase_line") == "SafeHold",
+        )
+
+
+def assert_causal_order() -> None:
+    required_before = [
+        ("risk_event", "delegation_emitted"),
+        ("incident_event", "delegation_emitted"),
+        ("delegation_emitted", "delegation_accepted"),
+        ("delegation_emitted", "execution_evidence"),
+        ("delegation_accepted", "executing"),
+        ("execution_evidence", "abort_command"),
+        ("executing", "abort_command"),
+        ("abort_command", "aborted"),
+        ("abort_command", "abort_result"),
+    ]
+    violations = [
+        f"{before} !< {after}"
+        for before, after in required_before
+        if FIRST_SEEN[before] >= FIRST_SEEN[after]
+    ]
+    if violations:
+        raise SystemExit("Golden demo causal ordering failed: " + ", ".join(violations))
 
 
 def main() -> None:
@@ -201,6 +241,7 @@ def main() -> None:
     missing = [name for name, seen in EXPECTED.items() if not seen]
     if missing:
         raise SystemExit(f"Golden demo acceptance failed; missing: {', '.join(missing)}")
+    assert_causal_order()
     print("GOLDEN DEMO ACCEPTANCE: PASS", flush=True)
 
 
