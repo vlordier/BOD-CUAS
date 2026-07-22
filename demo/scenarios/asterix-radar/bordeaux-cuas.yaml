@@ -1,0 +1,187 @@
+version: 1
+scenario_pack: bordeaux-cuas-asterix-radar
+site:
+  name: Bordeaux-Merignac synthetic C-UAS range
+  reference:
+    latitude: 44.8283
+    longitude: -0.7156
+    altitude_msl_m: 50
+  note: "All sensor performance values and trajectories are synthetic demo parameters, not claims about operational LFBD systems."
+
+transport:
+  asterix_subject: surveillance.asterix.record
+  normalized_subject: surveillance.observation
+  clock: realtime
+  seed: 42
+
+sensors:
+  - id: RADAR-BOD-SIM-01
+    kind: monoradar
+    asterix_category: 48
+    edition: "1.32"
+    sac: 1
+    sic: 48
+    position: { latitude: 44.8283, longitude: -0.7156, altitude_msl_m: 50 }
+    scan_rpm: 12
+    max_range_m: 12000
+    min_range_m: 80
+    range_resolution_m: 12
+    azimuth_resolution_deg: 0.8
+    p_detection_near: 0.96
+    p_detection_far: 0.55
+    false_alarms_per_scan: 1.5
+  - id: INCS-BOD-SIM-01
+    kind: independent_non_cooperative_surveillance
+    asterix_category: 15
+    edition: "1.2"
+    configuration_category: 16
+    pair_id: 4098
+    transmitter_id: 8194
+    receiver_id: 12290
+  - id: ADSB-BOD-SIM-01
+    kind: ads_b
+    asterix_category: 21
+  - id: RID-BOD-SIM-01
+    kind: cooperative_uas_id
+    asterix_category: 129
+  - id: FUSION-BOD-SIM-01
+    kind: system_track
+    asterix_category: 62
+  - id: HEALTH-BOD-SIM-01
+    kind: sensor_health
+    asterix_category: 63
+
+protected_volumes:
+  - id: runway-core
+    kind: cylinder
+    center: { latitude: 44.8283, longitude: -0.7156 }
+    radius_m: 1800
+    floor_msl_m: 0
+    ceiling_msl_m: 300
+  - id: terminal-critical
+    kind: cylinder
+    center: { latitude: 44.8310, longitude: -0.7010 }
+    radius_m: 700
+    floor_msl_m: 0
+    ceiling_msl_m: 180
+
+scenarios:
+  - id: baseline-mixed-traffic
+    title: Baseline mixed cooperative traffic
+    duration_s: 180
+    actors:
+      - { id: AFR-DEMO-01, kind: airliner, cooperative: true, sources: [21, 48], route: west_to_runway, altitude_m: 900 }
+      - { id: UAS-MAINT-01, kind: uas, cooperative: true, authorized: true, sources: [129, 15], route: perimeter_orbit, altitude_m: 70 }
+    objectives: [correlation, CAT021_CAT048_fusion, CAT129_authorization]
+
+  - id: rogue-consumer-inbound
+    title: Rogue consumer drone inbound to protected volume
+    duration_s: 180
+    actors:
+      - { id: ROGUE-01, kind: uas, cooperative: false, sources: [48, 15], route: west_inbound, altitude_m: 90, speed_mps: 18 }
+    inject:
+      missed_detection_probability: 0.10
+      position_noise_m: 18
+    objectives: [plot_to_track, noncooperative_detection, protected_volume_prediction, incident_escalation]
+
+  - id: low-slow-fpv-intermittent
+    title: Low slow FPV with intermittent detection
+    duration_s: 180
+    actors:
+      - { id: FPV-01, kind: uas, cooperative: false, sources: [15, 48], route: zigzag_low_level, altitude_m: 35, speed_mps: 24 }
+    inject:
+      radar_shadow_windows_s: [[35, 48], [78, 92]]
+      out_of_order_probability: 0.04
+    objectives: [track_coast, reacquisition, multi_sensor_fusion]
+
+  - id: authorized-rid-plus-radar
+    title: Authorized inspection UAS correlated across CAT129 and radar
+    duration_s: 150
+    actors:
+      - { id: UAS-INSPECT-07, kind: uas, cooperative: true, authorized: true, sources: [129, 15, 48], route: fence_inspection, altitude_m: 55 }
+    objectives: [identity_correlation, false_threat_avoidance, provenance_display]
+
+  - id: rid-spoof-mismatch
+    title: Remote ID position mismatch against independent surveillance
+    duration_s: 180
+    actors:
+      - { id: UAS-SPOOF-01, kind: uas, cooperative: true, authorized: false, sources: [129, 15, 48], route: east_inbound, altitude_m: 80 }
+    inject:
+      cat129_position_offset_m: 850
+      cat129_identity: UAS-MAINT-01
+    objectives: [cross_sensor_mismatch, spoof_suspicion, authorization_rejection]
+
+  - id: swarm-multi-axis
+    title: Multi-axis small UAS swarm
+    duration_s: 240
+    actors:
+      - { id: SWARM-A, kind: uas_group, count: 4, cooperative: false, sources: [15, 48], route: west_inbound, altitude_m: 75 }
+      - { id: SWARM-B, kind: uas_group, count: 3, cooperative: false, sources: [15], route: south_inbound, altitude_m: 110 }
+    objectives: [track_capacity, deconfliction, priority_ranking, concurrent_incidents]
+
+  - id: bird-flock-clutter
+    title: Bird flock and clutter discrimination
+    duration_s: 180
+    actors:
+      - { id: BIRDS-01, kind: bird_flock, count: 12, cooperative: false, sources: [48], route: north_crossing, altitude_m: 120, speed_mps: 12 }
+      - { id: UAS-HIDDEN-01, kind: uas, cooperative: false, sources: [15, 48], route: north_crossing, altitude_m: 95, speed_mps: 20 }
+    inject:
+      false_alarms_per_scan: 5
+    objectives: [classification_uncertainty, false_alarm_suppression, hidden_target_persistence]
+
+  - id: sensor-degradation
+    title: Radar degradation and CAT063 health propagation
+    duration_s: 210
+    actors:
+      - { id: ROGUE-DEG-01, kind: uas, cooperative: false, sources: [15, 48], route: west_inbound, altitude_m: 65 }
+    inject:
+      sensor_health_events:
+        - { at_s: 45, sensor: RADAR-BOD-SIM-01, state: degraded, azimuth_bias_deg: 0.7, plot_rate_factor: 0.65 }
+        - { at_s: 150, sensor: RADAR-BOD-SIM-01, state: nominal }
+    objectives: [CAT063, uncertainty_growth, resilient_fusion]
+
+  - id: packet-pathology
+    title: ASTERIX transport faults without unsafe state leakage
+    duration_s: 180
+    actors:
+      - { id: ROGUE-NET-01, kind: uas, cooperative: false, sources: [15, 48], route: west_inbound, altitude_m: 100 }
+    inject:
+      duplicate_probability: 0.08
+      out_of_order_probability: 0.12
+      packet_loss_probability: 0.09
+      clock_skew_ms: 850
+      malformed_record_every_n: 41
+    objectives: [bounded_decoder, provenance, duplicate_tolerance, fail_closed]
+
+  - id: runway-conflict-airliner-plus-uas
+    title: UAS threat concurrent with commercial approach
+    duration_s: 240
+    actors:
+      - { id: AIRLINER-APP-01, kind: airliner, cooperative: true, sources: [21, 48], route: west_to_runway, altitude_m: 700 }
+      - { id: ROGUE-CONFLICT-01, kind: uas, cooperative: false, sources: [15, 48], route: runway_crossing, altitude_m: 85, speed_mps: 22 }
+    objectives: [moving_protected_volume, civil_traffic_separation, threat_priority, safe_response_constraints]
+
+  - id: track-split-merge
+    title: Close targets causing track split and merge pressure
+    duration_s: 210
+    actors:
+      - { id: CLOSE-01, kind: uas, cooperative: false, sources: [48, 15], route: parallel_a, altitude_m: 80 }
+      - { id: CLOSE-02, kind: uas, cooperative: false, sources: [48, 15], route: parallel_b, altitude_m: 83 }
+    inject:
+      minimum_separation_m: 22
+    objectives: [association_stability, track_identity, split_merge_handling]
+
+  - id: full-demo-golden-path
+    title: Three-minute Bordeaux C-UAS golden demonstration
+    duration_s: 180
+    timeline:
+      - { at_s: 0, action: normal_air_traffic_and_authorized_uas }
+      - { at_s: 20, action: spawn_unknown_primary_plot_west }
+      - { at_s: 40, action: confirm_noncooperative_track }
+      - { at_s: 65, action: fail_CAT129_authorization_correlation }
+      - { at_s: 85, action: predict_runway_protected_volume_entry }
+      - { at_s: 105, action: raise_high_risk_incident }
+      - { at_s: 120, action: generate_bounded_response_mission }
+      - { at_s: 145, action: simulate_containment }
+      - { at_s: 165, action: close_incident_and_replay_evidence }
+    objectives: [end_to_end_demo, ASTERIX_to_Core_to_C2, evidence_replay]
