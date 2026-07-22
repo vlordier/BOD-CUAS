@@ -26,7 +26,8 @@ jobs:
           grep -q 'bod-demo-auth-4660' demo/golden/replay.py
           grep -q 'ROGUE_TRACK_ID = "4660"' demo/golden/replay.py
           grep -q 'rogue_kinematic_events' demo/golden/replay.py
-          grep -q 'stamp_cat015_time_of_day' demo/golden/replay.py
+          grep -Fq 'record[6:9]' demo/golden/replay.py
+          ! grep -Fq 'record[7:10]' demo/golden/replay.py
           grep -q '"safety.civilian_aircraft_conflict"' demo/golden/replay.py
           grep -q 'SUB furia.s1.mission-delegation' demo/golden/verify.py
           grep -q 'SUB furia.s1.execution-progress' demo/golden/verify.py
