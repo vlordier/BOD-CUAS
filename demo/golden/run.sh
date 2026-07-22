@@ -60,6 +60,7 @@ fi
 wait_tcp 127.0.0.1 4222 'NATS JetStream TCP'
 wait_tcp 127.0.0.1 9222 'NATS WebSocket'
 export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
+export FURIA_NATS_URL="${FURIA_NATS_URL:-$NATS_URL}"
 export VITE_NATS_WS_URL="${VITE_NATS_WS_URL:-ws://127.0.0.1:9222}"
 export UXV_CONFIG_DIR="${UXV_CONFIG_DIR:-$SCRIPT_DIR/../../config}"
 export DEMO_SPEED="${DEMO_SPEED:-4.0}"
@@ -76,7 +77,7 @@ echo '=== Build Core + S1 demo services ==='
 
 echo '=== Start Core airport-safety services ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & PIDS+=("$!")
-NATS_URL="$NATS_URL" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.log" 2>&1 & PIDS+=("$!")
+NATS_URL="$NATS_URL" FURIA_NATS_URL="$FURIA_NATS_URL" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.log" 2>&1 & PIDS+=("$!")
 NATS_URL="$NATS_URL" UXV_CONFIG_DIR="$UXV_CONFIG_DIR" "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas.log" 2>&1 &
 CUAS_PID=$!
 PIDS+=("$CUAS_PID")
@@ -94,11 +95,11 @@ wait_http http://127.0.0.1:3227/api/v1/scenarios 'S1 Sim Server' 90
 echo '=== Start SAPIENT simulator on JetStream ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/sapient-simulator" --target-lat 44.8283 --target-lon -0.7156 >"$LOG_DIR/sapient.log" 2>&1 & PIDS+=("$!")
 
-echo '=== Start Furia C2 ==='
+echo '=== Start Furia C2 on fixed port 5173 ==='
 (
   cd "$C2"
   pnpm install --frozen-lockfile
-  VITE_NATS_WS_URL="$VITE_NATS_WS_URL" NATS_URL="$NATS_URL" exec pnpm dev --host 127.0.0.1
+  VITE_NATS_WS_URL="$VITE_NATS_WS_URL" NATS_URL="$NATS_URL" exec pnpm dev --host 127.0.0.1 --port 5173 --strictPort
 ) >"$LOG_DIR/c2.log" 2>&1 & PIDS+=("$!")
 wait_http http://127.0.0.1:5173 'Furia C2' 90
 
@@ -120,6 +121,8 @@ if ! wait "$VERIFY_PID"; then
   tail -200 "$LOG_DIR/cuas.log" >&2 || true
   echo '--- S1 log ---' >&2
   tail -200 "$LOG_DIR/s1.log" >&2 || true
+  echo '--- C2 log ---' >&2
+  tail -200 "$LOG_DIR/c2.log" >&2 || true
   exit 1
 fi
 printf '%-28s ✅\n' 'Closed-loop acceptance'
@@ -128,7 +131,7 @@ cat <<EOF
 
 FURIA BORDEAUX GOLDEN DEMO READY
 
-JetStream TCP: $NATS_URL
+JetStream TCP:  $NATS_URL
 NATS WebSocket: $VITE_NATS_WS_URL
 Core:           http://127.0.0.1:3000
 C2:             http://127.0.0.1:5173
