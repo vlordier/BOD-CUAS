@@ -1,4 +1,4 @@
-version: 3
+version: 4
 scenario: bod-cuas-golden
 seed: 42
 clock: deterministic
@@ -9,6 +9,8 @@ acceptance:
   require_sensor_degradation_visibility: true
   require_named_authorization_before_delegation: true
   require_execution_evidence: true
+  require_comm_denied_continuation: true
+  require_comm_recovery_visibility: true
   require_civilian_safety_abort: true
   require_post_scenario_service_liveness: true
 
@@ -137,6 +139,35 @@ steps:
       - bounded_authority_remaining_visible
       - target_track_age_visible
 
+  - at_s: 50
+    id: comm-denied-local-health
+    stimulus: s1.sim.execution-health
+    comms_available: false
+    navigation_safe: true
+    authority_valid: true
+    note: simulation injects local health only; S1 guard derives Core-facing evidence
+    expected_output: cuas.execution.evidence
+    expected_state: active
+    expected_degraded_mode: lost_link_continuation
+    assertions:
+      - continuation_remains_inside_existing_delegation
+      - contract_remaining_must_be_positive
+      - no_new_authority_is_created
+      - no_rejection_reason
+
+  - at_s: 60
+    id: comm-restored-local-health
+    stimulus: s1.sim.execution-health
+    comms_available: true
+    navigation_safe: true
+    authority_valid: true
+    expected_output: cuas.execution.evidence
+    expected_state: active
+    expected_degraded_mode: normal
+    assertions:
+      - recovery_occurs_after_lost_link_continuation
+      - original_contract_correlation_preserved
+
   - at_s: 80
     id: civilian-aircraft-conflict
     stimulus: safety.civilian_aircraft_conflict
@@ -152,9 +183,11 @@ steps:
     observed_outputs:
       - swarm.command.result.abort
       - swarm.fsm.state
+      - cuas.execution.evidence
     expected_abort_status: executed
     expected_fsm_state: Aborted
     expected_phase_line: SafeHold
+    expected_degraded_mode: safety_hold
 
   - at_s: 95
     id: scenario-complete
@@ -168,6 +201,7 @@ steps:
       - furia-core
       - counter-uas-director
       - s1-sim-server
+      - cuas-health-injector
       - sapient-simulator
       - furia-c2
       - dev-atak-server
