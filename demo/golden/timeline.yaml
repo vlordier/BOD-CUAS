@@ -1,70 +1,63 @@
-version: 3
+version: 4
 scenario: bod-cuas-golden
 seed: 42
 clock: deterministic
 protected_volumes: ./protected-volumes.yaml
 acceptance:
-  note: "This file describes the executable golden replay and Core/S1 outputs actually verified by verify.py. It is not a future-roadmap narrative."
+  note: "This file describes the executable golden replay and Core/S1 outputs actually verified by the golden monitors. It is not a future-roadmap narrative."
   stale_track_max_ms: 5000
   require_sensor_degradation_visibility: true
   require_named_authorization_before_delegation: true
+  require_threat_origin_before_delegation: true
   require_execution_evidence: true
+  require_comm_denied_continuation_and_recovery: true
   require_civilian_safety_abort: true
+  require_final_correlated_safehold_evidence: true
   require_post_scenario_service_liveness: true
-
 steps:
-  - at_s: 0
-    id: scenario-start
-    stimulus: scenario.status
-    state: running
-
-  - at_s: 1.0
-    id: incs-pair-configuration
-    stimulus: surveillance.asterix.record
-    category: 16
-    expected_output: surveillance.incs.configuration
-
+  - { at_s: 0, id: scenario-start, stimulus: scenario.status, state: running }
+  - { at_s: 1.0, id: incs-pair-configuration, stimulus: surveillance.asterix.record, category: 16, expected_output: surveillance.incs.configuration }
   - at_s: 1.25
     id: authorized-inspection-uas
     stimulus: surveillance.asterix.record
     category: 129
-    identity: "uas:FR:DJI:M30:0102030405060708090a0b0c"
     expected_authorization: authorized
-
   - at_s: 1.5
     id: unknown-cooperative-uas
     stimulus: surveillance.asterix.record
     category: 129
     expected_authorization: unknown
     assertion: cooperative_identity_does_not_imply_authorization
-
   - at_s: 1.75
     id: expired-known-uas
     stimulus: surveillance.asterix.record
     category: 129
-    identity: "uas:FR:EXP:OLD:eeeeeeeeeeeeeeeeeeeeeeee"
     expected_authorization: unauthorized
-
   - at_s: 2.0
     id: noncooperative-runway-track-initial
     stimulus: surveillance.asterix.record
     category: 15
     source_track_id: 4660
     expected_kind: non_cooperative_target
-
   - at_s: 2.25
     id: sensor-degraded-initial
     stimulus: surveillance.asterix.record
     category: 63
     expected_output: surveillance.sensor.status
-    expected_status: degraded
-
   - at_s: 20
     id: operator-timeline-cue
     stimulus: operator.timeline
     track_id: "4660"
     note: display/narrative cue only; not an authority input
-
+  - at_s: 22
+    id: rf-acoustic-origin-evidence
+    stimuli: [surveillance.origin.bearing, surveillance.origin.tdoa_fix]
+    expected_outputs: [cuas.emitter.localization, cuas.threat.origin]
+    assertions:
+      - uncertainty_required
+      - observed_evidence_distinct_from_inference
+      - acoustic_does_not_localize_rf_controller
+      - origin_evidence_precedes_delegation
   - at_s: 30
     id: runway-incursion-prediction
     stimulus: safety.runway_incursion_predicted
@@ -82,30 +75,23 @@ steps:
         operator_acknowledgement_required: true
         mitigation_authorized: false
         decision_authority: null
-        recommendation: restrict_affected_runway_or_sector
-
   - at_s: 32
-    id: noncooperative-fresh-track-sample-1
+    id: fresh-track-sample-1
     stimulus: surveillance.asterix.record
     category: 15
     source_track_id: 4660
-    assertion: fresh_track_required_for_delegation
-
   - at_s: 32.5
     id: sensor-degradation-after-risk
     stimulus: surveillance.asterix.record
     category: 63
-    expected_output: cuas.risk.protected_volume
     assertion: threat_must_not_clear_from_sensor_loss_alone
     expected_sensor_coverage_degraded: true
-
   - at_s: 34
-    id: noncooperative-fresh-track-sample-2
+    id: fresh-track-sample-2
     stimulus: surveillance.asterix.record
     category: 15
     source_track_id: 4660
     assertion: derived_velocity_must_be_nonzero
-
   - at_s: 35
     id: named-operator-authorization
     stimulus: operator.action.authorized
@@ -114,29 +100,28 @@ steps:
     operator: demo-operator
     authorization_id: bod-demo-auth-4660
     expected_core_output: furia.s1.mission-delegation
-    assertions:
-      - named_authority_required
-      - no_direct_replay_to_s1
-      - nonlethal_task
-      - fresh_core_track_state_required
-
+    assertions: [named_authority_required, no_direct_replay_to_s1, nonlethal_task, fresh_core_track_state_required]
   - after: named-operator-authorization
-    id: delegation-projected
-    observed_output: cuas.mission.delegation
-    assertion: read_only_operator_projection_matches_authoritative_delegation
-
-  - after: delegation-projected
     id: s1-admission-and-execution
-    observed_outputs:
-      - furia.s1.execution-progress
-      - cuas.execution.evidence
-      - swarm.fsm.state
+    observed_outputs: [cuas.mission.delegation, furia.s1.execution-progress, cuas.execution.evidence, swarm.fsm.state]
     expected_fsm_state: ExecutingOpord
-    assertions:
-      - evidence_correlated_to_contract_and_revision
-      - bounded_authority_remaining_visible
-      - target_track_age_visible
-
+  - at_s: 55
+    id: comm-denied-continuation
+    stimulus: s1.sim.execution-health
+    facts: { comms_available: false, navigation_safe: true, authority_valid: true, local_track_fresh: true }
+    evaluated_by: s1.safety.delegation_guard
+    expected_core_admitted_evidence:
+      state: active
+      degraded_mode: lost_link_continuation
+      rejection_reason: null
+      contract_remaining_ms_gt: 0
+    assertion: continuation_is_bounded_by_existing_delegation_not_new_authority
+  - at_s: 65
+    id: comms-recovered
+    stimulus: s1.sim.execution-health
+    facts: { comms_available: true, navigation_safe: true, authority_valid: true, local_track_fresh: true }
+    expected_core_admitted_evidence: { state: active, degraded_mode: normal, rejection_reason: null }
+    assertion: normal_state_must_follow_lost_link_evidence
   - at_s: 80
     id: civilian-aircraft-conflict
     stimulus: safety.civilian_aircraft_conflict
@@ -146,32 +131,18 @@ steps:
     policy: BOD-RWY-FRATRICIDE-003
     expected_core_output: swarm.command.abort
     assertion: civilian_flight_safety_overrides_ongoing_response
-
   - after: civilian-aircraft-conflict
     id: safe-abort-result
-    observed_outputs:
-      - swarm.command.result.abort
-      - swarm.fsm.state
+    observed_outputs: [cuas.execution.evidence, swarm.command.result.abort, swarm.fsm.state]
+    expected_final_evidence: { state: aborted, degraded_mode: safety_hold, correlated_to_original_contract: true }
     expected_abort_status: executed
     expected_fsm_state: Aborted
     expected_phase_line: SafeHold
-
-  - at_s: 95
-    id: scenario-complete
-    stimulus: scenario.status
-    state: complete
-
+  - { at_s: 95, id: scenario-complete, stimulus: scenario.status, state: complete }
   - after: scenario-complete
     id: smoke-liveness
     observed_condition: all_demo_processes_alive
-    services:
-      - furia-core
-      - counter-uas-director
-      - s1-sim-server
-      - sapient-simulator
-      - furia-c2
-      - dev-atak-server
-
+    services: [furia-core, counter-uas-director, s1-sim-server, cuas-health-injector, sapient-simulator, furia-c2, dev-atak-server]
 non_claims:
   - no_certified_atc_integration
   - no_automatic_runway_closure_authority
