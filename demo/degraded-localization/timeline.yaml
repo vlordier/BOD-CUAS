@@ -1,0 +1,29 @@
+version: 1
+scenario: bod-cuas-degraded-localization
+seed: 44
+clock: deterministic
+purpose: "Demonstrate uncertainty expansion and recovery when RF localization geometry degrades."
+steps:
+  - { at_s: 0, id: scenario-start, stimulus: scenario.status, state: running }
+  - at_s: 5
+    id: establish-rf-fix
+    observations: [RF-01, RF-02, RF-03, TDOA]
+    expected_controller_estimate: { confidence_permille_min: 780, uncertainty_major_mm_max: 180000, uncertainty_minor_mm_max: 110000 }
+  - at_s: 15
+    id: rf-02-loss
+    stimulus: surveillance.sensor.status
+    sensor_id: RF-02
+    state: disconnected
+    assertions: [threat_track_remains_active, controller_estimate_not_cleared, localization_marked_degraded]
+  - at_s: 18
+    id: degraded-fix
+    observations: [RF-01, RF-03]
+    expected_effect: { uncertainty_expands: true, confidence_decreases: true }
+    operator_message: "RF-02 unavailable — localization confidence region expanded."
+  - { at_s: 28, id: rf-02-restored, stimulus: surveillance.sensor.status, sensor_id: RF-02, state: operational }
+  - at_s: 31
+    id: restored-fix
+    observations: [RF-01, RF-02, RF-03, TDOA]
+    expected_effect: { uncertainty_contracts: true, confidence_recovers: true }
+  - { at_s: 40, id: scenario-complete, stimulus: scenario.status, state: complete }
+acceptance: [never_present_point_location_without_uncertainty, degraded_sensor_state_is_visible, estimator_does_not_clear_existing_threat_from_sensor_loss_alone, restored_geometry_improves_estimate_without_rewriting_history]
