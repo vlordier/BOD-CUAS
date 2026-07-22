@@ -11,9 +11,10 @@ from urllib.parse import urlparse
 NATS_URL = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
 SPEED = max(float(os.environ.get("DEMO_SPEED", "4.0")), 0.01)
 TIMEOUT = 120.0 / SPEED + 30.0
-MISSION_ID = "cuas_bod_airport"
+MISSION_ID = "perimeter_defense_fob"
 
 EXPECTED = {
+    "delegation_emitted": False,
     "delegation_accepted": False,
     "executing": False,
     "abort_command": False,
@@ -47,7 +48,16 @@ def read_exact(sock: socket.socket, buf: bytearray, size: int) -> bytes:
 
 
 def observe(subject: str, payload: dict) -> None:
-    if subject == "furia.s1.execution-progress":
+    if subject == "furia.s1.mission-delegation":
+        EXPECTED["delegation_emitted"] = (
+            payload.get("schema") == "furia.s1.mission-delegation"
+            and payload.get("version") == "1.0.0"
+            and payload.get("mission_id") == MISSION_ID
+            and payload.get("authority", {}).get("mode") == "intercept"
+            and payload.get("authority", {}).get("authorization_id") == "bod-demo-auth-042"
+            and payload.get("graph", {}).get("tasks", [{}])[0].get("is_lethal") is False
+        )
+    elif subject == "furia.s1.execution-progress":
         if payload.get("mission_id") == MISSION_ID and payload.get("phase") in {"accepted", "active"}:
             EXPECTED["delegation_accepted"] = True
     elif subject == "swarm.command.abort":
@@ -82,10 +92,11 @@ def main() -> None:
         read_line(sock, buf)
         sock.sendall(
             b'CONNECT {"verbose":false,"pedantic":false,"lang":"python-stdlib","version":"1"}\r\n'
-            b"SUB furia.s1.execution-progress 1\r\n"
-            b"SUB swarm.fsm.state 2\r\n"
-            b"SUB swarm.command.abort 3\r\n"
-            b"SUB swarm.command.result.abort 4\r\n"
+            b"SUB furia.s1.mission-delegation 1\r\n"
+            b"SUB furia.s1.execution-progress 2\r\n"
+            b"SUB swarm.fsm.state 3\r\n"
+            b"SUB swarm.command.abort 4\r\n"
+            b"SUB swarm.command.result.abort 5\r\n"
             b"PING\r\n"
         )
 
