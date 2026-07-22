@@ -43,6 +43,14 @@ wait_process() {
     return 1
   fi
 }
+assert_alive() {
+  local pid="$1" label="$2" log="$3"
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "ERROR: $label exited unexpectedly" >&2
+    tail -200 "$log" >&2 2>/dev/null || true
+    return 1
+  fi
+}
 if [[ "${1:-}" == "--doctor" ]]; then exec bash "$SCRIPT_DIR/doctor.sh"; fi
 bash "$SCRIPT_DIR/doctor.sh"
 echo
@@ -75,8 +83,8 @@ echo '=== Build Core + S1 demo services ==='
 )
 
 echo '=== Start Core airport-safety services ==='
-NATS_URL="$NATS_URL" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & PIDS+=("$!")
-NATS_URL="$NATS_URL" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.log" 2>&1 & PIDS+=("$!")
+NATS_URL="$NATS_URL" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & ATAK_PID=$!; PIDS+=("$ATAK_PID")
+NATS_URL="$NATS_URL" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.log" 2>&1 & CORE_PID=$!; PIDS+=("$CORE_PID")
 NATS_URL="$NATS_URL" UXV_CONFIG_DIR="$UXV_CONFIG_DIR" "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas.log" 2>&1 &
 CUAS_PID=$!
 PIDS+=("$CUAS_PID")
@@ -88,18 +96,18 @@ echo '=== Start S1 simulation service on JetStream ==='
 (
   cd "$S1"
   exec ./target/release/s1-sim-server --nats-url "$NATS_URL" --port 3227
-) >"$LOG_DIR/s1.log" 2>&1 & PIDS+=("$!")
+) >"$LOG_DIR/s1.log" 2>&1 & S1_PID=$!; PIDS+=("$S1_PID")
 wait_http http://127.0.0.1:3227/api/v1/scenarios 'S1 Sim Server' 90
 
 echo '=== Start SAPIENT simulator on JetStream ==='
-NATS_URL="$NATS_URL" "$CORE/target/release/sapient-simulator" --target-lat 44.8283 --target-lon -0.7156 >"$LOG_DIR/sapient.log" 2>&1 & PIDS+=("$!")
+NATS_URL="$NATS_URL" "$CORE/target/release/sapient-simulator" --target-lat 44.8283 --target-lon -0.7156 >"$LOG_DIR/sapient.log" 2>&1 & SAPIENT_PID=$!; PIDS+=("$SAPIENT_PID")
 
 echo '=== Start Furia C2 ==='
 (
   cd "$C2"
   pnpm install --frozen-lockfile
   VITE_NATS_WS_URL="$VITE_NATS_WS_URL" NATS_URL="$NATS_URL" exec pnpm dev --host 127.0.0.1
-) >"$LOG_DIR/c2.log" 2>&1 & PIDS+=("$!")
+) >"$LOG_DIR/c2.log" 2>&1 & C2_PID=$!; PIDS+=("$C2_PID")
 wait_http http://127.0.0.1:5173 'Furia C2' 90
 
 echo '=== Arm closed-loop acceptance monitor ==='
@@ -124,6 +132,21 @@ if ! wait "$VERIFY_PID"; then
 fi
 printf '%-28s ✅\n' 'Closed-loop acceptance'
 
+if ! wait "$REPLAY_PID"; then
+  echo 'ERROR: Bordeaux deterministic replay failed.' >&2
+  cat "$LOG_DIR/replay.log" >&2 || true
+  exit 1
+fi
+printf '%-28s ✅\n' 'Deterministic replay'
+
+assert_alive "$ATAK_PID" 'ATAK dev server' "$LOG_DIR/dev-atak.log"
+assert_alive "$CORE_PID" 'Furia Core' "$LOG_DIR/core.log"
+assert_alive "$CUAS_PID" 'C-UAS director' "$LOG_DIR/cuas.log"
+assert_alive "$S1_PID" 'S1 Sim Server' "$LOG_DIR/s1.log"
+assert_alive "$SAPIENT_PID" 'SAPIENT simulator' "$LOG_DIR/sapient.log"
+assert_alive "$C2_PID" 'Furia C2' "$LOG_DIR/c2.log"
+printf '%-28s ✅\n' 'Post-scenario liveness'
+
 cat <<EOF
 
 FURIA BORDEAUX GOLDEN DEMO READY
@@ -144,6 +167,12 @@ Logs:           $LOG_DIR
 
 Transport policy: NATS JetStream only for backend services; browser C2 uses the NATS WebSocket listener on the same broker.
 Acceptance proved: surveillance -> protected-volume risk/incident -> sensor degradation visibility -> named bounded delegation -> S1 evidence -> civilian-safety abort -> Aborted/SafeHold.
-Press Ctrl-C to stop all demo processes.
 EOF
+
+if [[ "${GOLDEN_EXIT_AFTER_ACCEPTANCE:-0}" == "1" ]]; then
+  echo 'SMOKE RESULT: PASS'
+  exit 0
+fi
+
+echo 'Press Ctrl-C to stop all demo processes.'
 wait
