@@ -46,6 +46,7 @@ else
 fi
 wait_tcp 127.0.0.1 4222 'NATS JetStream'
 export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
+export DEMO_SPEED="${DEMO_SPEED:-4.0}"
 
 echo '=== Build Core + S1 demo services ==='
 (
@@ -84,13 +85,13 @@ echo '=== Start Furia C2 ==='
 wait_http http://127.0.0.1:5173 'Furia C2' 90
 
 echo '=== Arm closed-loop acceptance monitor ==='
-NATS_URL="$NATS_URL" DEMO_SPEED="${DEMO_SPEED:-1.0}" python3 "$SCRIPT_DIR/verify.py" >"$LOG_DIR/verify.log" 2>&1 &
+NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/verify.py" >"$LOG_DIR/verify.log" 2>&1 &
 VERIFY_PID=$!
 PIDS+=("$VERIFY_PID")
 sleep 0.5
 
 echo '=== Start deterministic operational replay ==='
-NATS_URL="$NATS_URL" DEMO_SPEED="${DEMO_SPEED:-1.0}" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 &
+NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 &
 REPLAY_PID=$!
 PIDS+=("$REPLAY_PID")
 
