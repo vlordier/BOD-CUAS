@@ -67,7 +67,7 @@ export DEMO_SPEED="${DEMO_SPEED:-4.0}"
 
 echo '=== Build Core + S1 demo services ==='
 (cd "$CORE" && cargo build --release -p furia-core-server -p dev-atak-server -p counter-uas-director -p sapient-simulator)
-(cd "$S1" && cargo build --release -p s1-sim-server)
+(cd "$S1" && cargo build --release -p s1-sim-server --bins)
 
 echo '=== Start Core airport-safety services ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & ATAK_PID=$!; PIDS+=("$ATAK_PID")
@@ -77,9 +77,11 @@ wait_http http://127.0.0.1:8080/health 'ATAK dev server'
 wait_http http://127.0.0.1:3000/health 'Furia Core'
 wait_process "$CUAS_PID" 'C-UAS director (NATS-only)' 2
 
-echo '=== Start S1 simulation service on JetStream ==='
+echo '=== Start S1 simulation services on JetStream ==='
 (cd "$S1" && exec ./target/release/s1-sim-server --nats-url "$NATS_URL" --port 3227) >"$LOG_DIR/s1.log" 2>&1 & S1_PID=$!; PIDS+=("$S1_PID")
 wait_http http://127.0.0.1:3227/api/v1/scenarios 'S1 Sim Server' 90
+(cd "$S1" && exec ./target/release/cuas-health-injector --nats-url "$NATS_URL") >"$LOG_DIR/s1-health.log" 2>&1 & S1_HEALTH_PID=$!; PIDS+=("$S1_HEALTH_PID")
+wait_process "$S1_HEALTH_PID" 'S1 bounded health injector' 2
 
 echo '=== Start SAPIENT simulator on JetStream ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/sapient-simulator" --target-lat 44.8283 --target-lon -0.7156 >"$LOG_DIR/sapient.log" 2>&1 & SAPIENT_PID=$!; PIDS+=("$SAPIENT_PID")
@@ -101,6 +103,7 @@ if ! wait "$VERIFY_PID"; then
   cat "$LOG_DIR/verify.log" >&2 || true
   tail -200 "$LOG_DIR/cuas.log" >&2 || true
   tail -200 "$LOG_DIR/s1.log" >&2 || true
+  tail -200 "$LOG_DIR/s1-health.log" >&2 || true
   tail -200 "$LOG_DIR/c2.log" >&2 || true
   exit 1
 fi
@@ -124,6 +127,7 @@ assert_alive "$ATAK_PID" 'ATAK dev server' "$LOG_DIR/dev-atak.log"
 assert_alive "$CORE_PID" 'Furia Core' "$LOG_DIR/core.log"
 assert_alive "$CUAS_PID" 'C-UAS director' "$LOG_DIR/cuas.log"
 assert_alive "$S1_PID" 'S1 Sim Server' "$LOG_DIR/s1.log"
+assert_alive "$S1_HEALTH_PID" 'S1 health injector' "$LOG_DIR/s1-health.log"
 assert_alive "$SAPIENT_PID" 'SAPIENT simulator' "$LOG_DIR/sapient.log"
 assert_alive "$C2_PID" 'Furia C2' "$LOG_DIR/c2.log"
 printf '%-28s ✅\n' 'Post-scenario liveness'
@@ -138,6 +142,7 @@ Core:           http://127.0.0.1:3000
 C2:             http://127.0.0.1:5173
 S1:             http://127.0.0.1:3227
 C-UAS director: NATS-only process (log: $LOG_DIR/cuas.log)
+S1 health:      bounded guard injector (log: $LOG_DIR/s1-health.log)
 SAPIENT:        publishing to JetStream
 ASTERIX:        CAT015/016 + CAT021 + CAT048(optional) + CAT062/063 + CAT129
 Origin sensing: synthetic RF AoA/TDOA + acoustic corroboration, uncertainty preserved
@@ -148,7 +153,7 @@ Verify log:     $LOG_DIR/verify.log
 Origin verify:  $LOG_DIR/verify-origin.log
 Logs:           $LOG_DIR
 
-Acceptance proved: surveillance -> Core-owned threat-origin/emitter inference -> protected-volume risk/incident -> sensor degradation -> named bounded delegation -> S1 evidence -> civilian-safety abort -> final correlated Aborted/SafeHold evidence.
+Acceptance proved: surveillance -> Core-owned threat-origin/emitter inference -> protected-volume risk/incident -> sensor degradation -> named bounded delegation -> S1 execution evidence -> bounded comm-denied continuation -> recovery -> civilian-safety abort -> final correlated Aborted/SafeHold evidence.
 EOF
 
 if [[ "${GOLDEN_EXIT_AFTER_ACCEPTANCE:-0}" == "1" ]]; then
