@@ -63,23 +63,43 @@ def origin_evidence_events() -> list[tuple[float, str, dict]]:
         # from first-detection vicinity to explicit trajectory back-projection hypotheses.
         (34.2, {**base, "sensor_id": "RF-01", "sensor_latitude_e7": 448_300_000, "sensor_longitude_e7": -7_500_000, "bearing_mdeg": 102_000, "sigma_mdeg": 4_000}),
     ]
-    tdoa = (
-        24.0,
-        "surveillance.origin.tdoa_fix",
-        {
-            "track_id": ROGUE_TRACK_ID,
-            "emitter_id": "RF-12",
-            "observed_at_ms": 0,
-            "latitude_e7": 448_305_000,
-            "longitude_e7": -7_130_000,
-            "uncertainty_major_mm": 140_000,
-            "uncertainty_minor_mm": 85_000,
-            "uncertainty_bearing_mdeg": 72_000,
-            "confidence_permille": 820,
-            "sensor_ids": ["RF-01", "RF-02", "RF-03"],
-        },
-    )
-    return [(at, "surveillance.origin.bearing", payload) for at, payload in bearings] + [tdoa]
+    tdoa_fixes = [
+        (
+            24.0,
+            "surveillance.origin.tdoa_fix",
+            {
+                "track_id": ROGUE_TRACK_ID,
+                "emitter_id": "RF-12",
+                "observed_at_ms": 0,
+                "latitude_e7": 448_305_000,
+                "longitude_e7": -7_130_000,
+                "uncertainty_major_mm": 140_000,
+                "uncertainty_minor_mm": 85_000,
+                "uncertainty_bearing_mdeg": 72_000,
+                "confidence_permille": 820,
+                "sensor_ids": ["RF-01", "RF-02", "RF-03"],
+            },
+        ),
+        # A later independent fix has moved enough to classify the controller as mobile
+        # without exposing the simulator's exact truth trajectory.
+        (
+            34.6,
+            "surveillance.origin.tdoa_fix",
+            {
+                "track_id": ROGUE_TRACK_ID,
+                "emitter_id": "RF-12",
+                "observed_at_ms": 0,
+                "latitude_e7": 448_307_000,
+                "longitude_e7": -7_127_000,
+                "uncertainty_major_mm": 155_000,
+                "uncertainty_minor_mm": 95_000,
+                "uncertainty_bearing_mdeg": 74_000,
+                "confidence_permille": 790,
+                "sensor_ids": ["RF-01", "RF-02", "RF-03"],
+            },
+        ),
+    ]
+    return [(at, "surveillance.origin.bearing", payload) for at, payload in bearings] + tdoa_fixes
 
 
 def stamp_cat015_time_of_day(record: list[int], now_ms: int) -> None:
