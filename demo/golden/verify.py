@@ -16,6 +16,8 @@ ROGUE_TRACK_ID = "4660"
 AUTHORIZATION_ID = "bod-demo-auth-4660"
 
 EXPECTED = {
+    "emitter_localization": False,
+    "threat_origin": False,
     "risk_event": False,
     "incident_event": False,
     "sensor_degradation_visible": False,
@@ -86,10 +88,52 @@ def valid_delegation(payload: dict) -> bool:
     )
 
 
+def valid_geo_estimate(estimate: dict | None) -> bool:
+    if not isinstance(estimate, dict):
+        return False
+    major = estimate.get("uncertainty_major_mm")
+    minor = estimate.get("uncertainty_minor_mm")
+    confidence = estimate.get("confidence_permille")
+    return (
+        isinstance(major, int)
+        and isinstance(minor, int)
+        and major >= minor > 0
+        and isinstance(confidence, int)
+        and 0 <= confidence <= 1000
+        and isinstance(estimate.get("latitude_e7"), int)
+        and isinstance(estimate.get("longitude_e7"), int)
+    )
+
+
 def observe(subject: str, payload: dict) -> None:
     global EVENT_INDEX
     EVENT_INDEX += 1
-    if subject == "cuas.risk.protected_volume":
+    if subject == "cuas.emitter.localization":
+        evidence = payload.get("evidence") or []
+        methods = set(payload.get("methods") or [])
+        mark(
+            "emitter_localization",
+            payload.get("associated_track_id") == ROGUE_TRACK_ID
+            and payload.get("emitter_id") == "RF-12"
+            and valid_geo_estimate(payload.get("estimate"))
+            and "fused" in methods
+            and any(item.get("kind") == "rf_bearing" for item in evidence if isinstance(item, dict)),
+        )
+    elif subject == "cuas.threat.origin":
+        hypotheses = payload.get("launch_hypotheses") or []
+        probability_mass = sum(item.get("probability_permille", 0) for item in hypotheses if isinstance(item, dict))
+        mark(
+            "threat_origin",
+            payload.get("track_id") == ROGUE_TRACK_ID
+            and payload.get("associated_emitter_id") == "RF-12"
+            and isinstance(payload.get("inference_version"), str)
+            and bool(payload.get("inference_version"))
+            and len(hypotheses) >= 1
+            and probability_mass <= 1000
+            and valid_geo_estimate(payload.get("controller_estimate"))
+            and all(valid_geo_estimate(item.get("estimate")) for item in hypotheses if isinstance(item, dict)),
+        )
+    elif subject == "cuas.risk.protected_volume":
         intersections = payload.get("intersections") or []
         horizons = {item.get("horizon_sec") for item in intersections if isinstance(item, dict)}
         core_risk_valid = (
@@ -118,54 +162,32 @@ def observe(subject: str, payload: dict) -> None:
     elif subject == "cuas.mission.delegation":
         mark("delegation_projected", valid_delegation(payload))
     elif subject == "furia.s1.execution-progress":
-        mark(
-            "delegation_accepted",
-            payload.get("mission_id") == MISSION_ID and payload.get("phase") in {"accepted", "active"},
-        )
+        mark("delegation_accepted", payload.get("mission_id") == MISSION_ID and payload.get("phase") in {"accepted", "active"})
     elif subject == "cuas.execution.evidence":
         mark(
             "execution_evidence",
             payload.get("plan_revision") == 1
             and payload.get("state") in {"accepted", "active", "safe_hold", "aborted"}
-            and payload.get("degraded_mode")
-            in {
-                "normal",
-                "stale_remote_tracks",
-                "degraded_navigation",
-                "degraded_communications",
-                "lost_link_continuation",
-                "safety_hold",
-                "return_to_launch",
-            }
+            and payload.get("degraded_mode") in {"normal", "stale_remote_tracks", "degraded_navigation", "degraded_communications", "lost_link_continuation", "safety_hold", "return_to_launch"}
             and isinstance(payload.get("contract_remaining_ms"), int)
             and payload.get("contract_remaining_ms", -1) >= 0
             and isinstance(payload.get("track_age_ms"), int)
             and payload.get("track_age_ms", -1) >= 0,
         )
     elif subject == "swarm.command.abort":
-        mark(
-            "abort_command",
-            payload.get("version") == "1.0.0"
-            and payload.get("action") == "abort"
-            and payload.get("mission_id") == MISSION_ID
-            and payload.get("policy_id") == "BOD-RWY-FRATRICIDE-003"
-            and payload.get("source") == "core-safety-policy",
-        )
+        mark("abort_command", payload.get("version") == "1.0.0" and payload.get("action") == "abort" and payload.get("mission_id") == MISSION_ID and payload.get("policy_id") == "BOD-RWY-FRATRICIDE-003" and payload.get("source") == "core-safety-policy")
     elif subject == "swarm.command.result.abort":
         mark("abort_result", payload.get("mission_id") == MISSION_ID and payload.get("status") == "executed")
     elif subject == "swarm.fsm.state":
         state = payload.get("state")
         mark("executing", payload.get("mission_id") == MISSION_ID and state == "ExecutingOpord")
-        mark(
-            "aborted",
-            payload.get("mission_id") == MISSION_ID
-            and state == "Aborted"
-            and payload.get("phase_line") == "SafeHold",
-        )
+        mark("aborted", payload.get("mission_id") == MISSION_ID and state == "Aborted" and payload.get("phase_line") == "SafeHold")
 
 
 def assert_causal_order() -> None:
     required_before = [
+        ("emitter_localization", "delegation_emitted"),
+        ("threat_origin", "delegation_emitted"),
         ("risk_event", "delegation_emitted"),
         ("incident_event", "delegation_emitted"),
         ("delegation_emitted", "delegation_accepted"),
@@ -176,11 +198,7 @@ def assert_causal_order() -> None:
         ("abort_command", "aborted"),
         ("abort_command", "abort_result"),
     ]
-    violations = [
-        f"{before} !< {after}"
-        for before, after in required_before
-        if FIRST_SEEN[before] >= FIRST_SEEN[after]
-    ]
+    violations = [f"{before} !< {after}" for before, after in required_before if FIRST_SEEN[before] >= FIRST_SEEN[after]]
     if violations:
         raise SystemExit("Golden demo causal ordering failed: " + ", ".join(violations))
 
@@ -206,6 +224,8 @@ def main() -> None:
             b"SUB cuas.execution.evidence 7\r\n"
             b"SUB cuas.risk.protected_volume 8\r\n"
             b"SUB cuas.incident.state 9\r\n"
+            b"SUB cuas.emitter.localization 10\r\n"
+            b"SUB cuas.threat.origin 11\r\n"
             b"PING\r\n"
         )
 
