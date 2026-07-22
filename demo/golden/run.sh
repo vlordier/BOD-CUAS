@@ -33,19 +33,34 @@ wait_tcp() {
   done
   printf '%-28s ✅\n' "$label"
 }
+wait_process() {
+  local pid="$1" label="$2" seconds="${3:-2}"
+  sleep "$seconds"
+  if kill -0 "$pid" 2>/dev/null; then
+    printf '%-28s ✅\n' "$label"
+  else
+    echo "ERROR: $label exited during startup" >&2
+    return 1
+  fi
+}
 if [[ "${1:-}" == "--doctor" ]]; then exec bash "$SCRIPT_DIR/doctor.sh"; fi
 bash "$SCRIPT_DIR/doctor.sh"
 echo
 echo '=== Start NATS JetStream backbone ==='
 if command -v nats-server >/dev/null 2>&1; then
-  nats-server -js -p 4222 >"$LOG_DIR/nats.log" 2>&1 & PIDS+=("$!")
+  nats-server -c "$SCRIPT_DIR/nats.conf" >"$LOG_DIR/nats.log" 2>&1 & PIDS+=("$!")
 else
   name="furia-bod-nats-$$"
-  docker run --rm --name "$name" -p 4222:4222 nats:2.10-alpine -js >"$LOG_DIR/nats.log" 2>&1 &
+  docker run --rm --name "$name" \
+    -p 4222:4222 -p 9222:9222 \
+    -v "$SCRIPT_DIR/nats.conf:/etc/nats/nats.conf:ro" \
+    nats:2.10-alpine -c /etc/nats/nats.conf >"$LOG_DIR/nats.log" 2>&1 &
   PIDS+=("$!"); CONTAINERS+=("$name")
 fi
-wait_tcp 127.0.0.1 4222 'NATS JetStream'
+wait_tcp 127.0.0.1 4222 'NATS JetStream TCP'
+wait_tcp 127.0.0.1 9222 'NATS WebSocket'
 export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
+export VITE_NATS_WS_URL="${VITE_NATS_WS_URL:-ws://127.0.0.1:9222}"
 export UXV_CONFIG_DIR="${UXV_CONFIG_DIR:-$SCRIPT_DIR/../../config}"
 export DEMO_SPEED="${DEMO_SPEED:-4.0}"
 
@@ -59,13 +74,15 @@ echo '=== Build Core + S1 demo services ==='
   cargo build --release -p s1-sim-server
 )
 
-echo '=== Start Core C-UAS services ==='
+echo '=== Start Core airport-safety services ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & PIDS+=("$!")
 NATS_URL="$NATS_URL" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.log" 2>&1 & PIDS+=("$!")
-NATS_URL="$NATS_URL" UXV_CONFIG_DIR="$UXV_CONFIG_DIR" "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas.log" 2>&1 & PIDS+=("$!")
+NATS_URL="$NATS_URL" UXV_CONFIG_DIR="$UXV_CONFIG_DIR" "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas.log" 2>&1 &
+CUAS_PID=$!
+PIDS+=("$CUAS_PID")
 wait_http http://127.0.0.1:8080/health 'ATAK dev server'
 wait_http http://127.0.0.1:3000/health 'Furia Core'
-wait_http http://127.0.0.1:3475/health 'C-UAS director'
+wait_process "$CUAS_PID" 'C-UAS director (NATS-only)' 2
 
 echo '=== Start S1 simulation service on JetStream ==='
 (
@@ -81,7 +98,7 @@ echo '=== Start Furia C2 ==='
 (
   cd "$C2"
   pnpm install --frozen-lockfile
-  NATS_URL="$NATS_URL" exec pnpm dev --host 127.0.0.1
+  VITE_NATS_WS_URL="$VITE_NATS_WS_URL" NATS_URL="$NATS_URL" exec pnpm dev --host 127.0.0.1
 ) >"$LOG_DIR/c2.log" 2>&1 & PIDS+=("$!")
 wait_http http://127.0.0.1:5173 'Furia C2' 90
 
@@ -99,6 +116,10 @@ PIDS+=("$REPLAY_PID")
 if ! wait "$VERIFY_PID"; then
   echo 'ERROR: Bordeaux golden demo acceptance failed.' >&2
   cat "$LOG_DIR/verify.log" >&2 || true
+  echo '--- C-UAS director log ---' >&2
+  tail -200 "$LOG_DIR/cuas.log" >&2 || true
+  echo '--- S1 log ---' >&2
+  tail -200 "$LOG_DIR/s1.log" >&2 || true
   exit 1
 fi
 printf '%-28s ✅\n' 'Closed-loop acceptance'
@@ -107,21 +128,22 @@ cat <<EOF
 
 FURIA BORDEAUX GOLDEN DEMO READY
 
-JetStream:  $NATS_URL
-Core:       http://127.0.0.1:3000
-C2:         http://127.0.0.1:5173
-C-UAS:      http://127.0.0.1:3475
-S1:         http://127.0.0.1:3227
-SAPIENT:    publishing to JetStream stream FURIA_CUAS
-ASTERIX:    CAT016 + CAT129 authorized/unknown/unauthorized + CAT015 + CAT063
-Auth config: $UXV_CONFIG_DIR/cuas-authorizations.yaml
-Timeline:   $SCRIPT_DIR/timeline.yaml
-Replay log: $LOG_DIR/replay.log
-Verify log: $LOG_DIR/verify.log
-Logs:       $LOG_DIR
+JetStream TCP: $NATS_URL
+NATS WebSocket: $VITE_NATS_WS_URL
+Core:           http://127.0.0.1:3000
+C2:             http://127.0.0.1:5173
+S1:             http://127.0.0.1:3227
+C-UAS director: NATS-only process (log: $LOG_DIR/cuas.log)
+SAPIENT:        publishing to JetStream
+ASTERIX:        CAT016 + CAT129 authorized/unknown/unauthorized + CAT015 + CAT063
+Auth config:    $UXV_CONFIG_DIR/cuas-authorizations.yaml
+Timeline:       $SCRIPT_DIR/timeline.yaml
+Replay log:     $LOG_DIR/replay.log
+Verify log:     $LOG_DIR/verify.log
+Logs:           $LOG_DIR
 
-Transport policy: NATS JetStream only. No Zenoh transport is used by the golden path.
-Acceptance proved: canonical S1 delegation -> executing FSM -> Core policy abort -> S1 abort result -> Aborted/SafeHold FSM.
+Transport policy: NATS JetStream only for backend services; browser C2 uses the NATS WebSocket listener on the same broker.
+Acceptance proved: surveillance -> protected-volume risk/incident -> sensor degradation visibility -> named bounded delegation -> S1 evidence -> civilian-safety abort -> Aborted/SafeHold.
 Press Ctrl-C to stop all demo processes.
 EOF
 wait

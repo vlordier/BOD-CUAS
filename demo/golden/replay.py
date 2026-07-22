@@ -55,10 +55,15 @@ def rogue_kinematic_events() -> list[tuple[float, str, dict]]:
     ]
 
 
+def degraded_sensor_event() -> tuple[float, str, dict]:
+    """Replay CAT063 degradation after risk creation so degradation propagation is observable."""
+    fixture = next(item for item in fixtures() if item["name"] == "degraded-sensor-status")
+    return (32.5, ASTERIX_SUBJECT, ingress_payload(fixture))
+
+
 def stamp_cat015_time_of_day(record: list[int], now_ms: int) -> None:
     """Patch bounded CAT015 FRN6 to the live 1/128-second UTC time-of-day."""
     # Fixture layout: 2-byte FSPEC, SAC/SIC, message type, service id, then FRN6 time.
-    # Therefore FRN6 occupies bytes 6..8 (Python slice 6:9).
     raw = ((now_ms % 86_400_000) * 128 // 1000) & 0xFFFFFF
     record[6:9] = [(raw >> 16) & 0xFF, (raw >> 8) & 0xFF, raw & 0xFF]
 
@@ -69,9 +74,10 @@ EVENTS = [
     (20.0, "operator.timeline", {"event": "rogue_uas_detected", "track_id": ROGUE_TRACK_ID, "severity": "high"}),
     (30.0, "safety.runway_incursion_predicted", {"track_id": ROGUE_TRACK_ID, "runway": "05/23", "eta_s": 37}),
     *rogue_kinematic_events(),
-    # The replay never publishes directly to S1. Core consumes this explicit named
-    # authorization and creates the bounded/versioned mission delegation from the
-    # fresh normalized CAT015 track state above.
+    degraded_sensor_event(),
+    # The replay never publishes directly to S1 or to Core-owned decision outputs.
+    # Core consumes this explicit named authorization and creates the bounded/versioned
+    # mission delegation from fresh normalized CAT015 track state.
     (
         35.0,
         "operator.action.authorized",
