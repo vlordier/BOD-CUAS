@@ -1,0 +1,99 @@
+version: 1
+scenario: bod-cuas-false-positive-bird
+seed: 43
+clock: deterministic
+purpose: "Demonstrate uncertainty resolution, benign disposition, and structured feedback without auto-learning into safety-critical behavior."
+
+steps:
+  - at_s: 0
+    id: scenario-start
+    stimulus: scenario.status
+    state: running
+
+  - at_s: 5
+    id: ambiguous-small-track
+    stimulus: surveillance.asterix.record
+    category: 15
+    source_track_id: 4771
+    expected_kind: non_cooperative_target
+
+  - at_s: 10
+    id: initial-investigate-state
+    expected_core_state:
+      threat_state: investigate
+      classification:
+        drone_permille: 440
+        bird_permille: 430
+        unknown_permille: 130
+    assertion: detection_does_not_equal_threat
+
+  - at_s: 14
+    id: no-associated-rf-controller
+    observation: rf_negative_evidence
+    assertion: absence_of_rf_is_evidence_not_proof_of_benignity
+
+  - at_s: 18
+    id: acoustic-biological-corroboration
+    observation: acoustic_classification
+    classification:
+      bird_permille: 820
+      rotorcraft_permille: 120
+      unknown_permille: 60
+
+  - at_s: 22
+    id: eo-confirmation
+    observation: electro_optical_classification
+    classification:
+      bird_permille: 960
+      drone_permille: 20
+      unknown_permille: 20
+    expected_risk_transition: investigate_to_low
+
+  - at_s: 28
+    id: operator-benign-disposition
+    action: cuas.record-incident-disposition
+    disposition: false_positive_bird
+    note: "EO and acoustic evidence consistent with bird; no correlated RF controller."
+    assertions:
+      - structured_feedback_recorded
+      - raw_evidence_retained
+      - no_online_model_weight_change
+      - disposition_is_audit_evidence_not_sensor_truth
+
+  - at_s: 35
+    id: similar-track-reappears
+    expected_decision_support:
+      historical_similarity_permille: 870
+      suggestion: likely_biological
+      auto_dismiss: false
+    assertion: historical_memory_may_reduce_workload_but_must_not_silently_clear_airport_risk
+
+  - at_s: 45
+    id: scenario-complete
+    stimulus: scenario.status
+    state: complete
+
+learning_policy:
+  immediate_operational_memory:
+    allowed:
+      - similar_incident_retrieval
+      - recurring_benign_pattern_suggestion
+      - operator_workload_prioritization
+    forbidden:
+      - automatic_safety_threshold_mutation
+      - silent_model_retraining
+      - automatic_threat_dismissal
+  offline_learning:
+    pipeline:
+      - evidence_export
+      - label_review
+      - dataset_versioning
+      - retraining_or_calibration
+      - held_out_evaluation
+      - shadow_mode
+      - approved_promotion
+
+non_claims:
+  - no_live_bird_classifier_is_asserted_by_this scenario
+  - no_automatic_online_learning
+  - no_auto-dismissal_of_unknown_tracks
