@@ -87,7 +87,8 @@ def observe(subject: str, payload: dict) -> None:
             and payload.get("recommendation") == "protect_volume"
             and "05/23" in (payload.get("affected_runways_or_sectors") or [])
             and {60, 120}.issubset(horizons)
-            and payload.get("authorized") is False
+            and payload.get("authorization_known") is False
+            and payload.get("authorized") is None
         )
         EXPECTED["risk_event"] = EXPECTED["risk_event"] or core_risk_valid
         if core_risk_valid and payload.get("sensor_coverage_degraded") is True:
