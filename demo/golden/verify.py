@@ -17,7 +17,9 @@ AUTHORIZATION_ID = "bod-demo-auth-4660"
 
 EXPECTED = {
     "delegation_emitted": False,
+    "delegation_projected": False,
     "delegation_accepted": False,
+    "execution_evidence": False,
     "executing": False,
     "abort_command": False,
     "abort_result": False,
@@ -49,30 +51,55 @@ def read_exact(sock: socket.socket, buf: bytearray, size: int) -> bytes:
     return data
 
 
+def valid_delegation(payload: dict) -> bool:
+    constraints = payload.get("cuas_constraints") or {}
+    target = constraints.get("target") or {}
+    velocity = target.get("velocity_ned_mm_s")
+    tasks = payload.get("graph", {}).get("tasks") or []
+    first_task = tasks[0] if tasks else {}
+    return (
+        payload.get("schema") == "furia.s1.mission-delegation"
+        and payload.get("version") == "1.0.0"
+        and payload.get("mission_id") == MISSION_ID
+        and payload.get("plan_revision") == 1
+        and payload.get("authority", {}).get("mode") == "intercept"
+        and payload.get("authority", {}).get("authorization_id") == AUTHORIZATION_ID
+        and target.get("track_id") == ROGUE_TRACK_ID
+        and isinstance(velocity, list)
+        and len(velocity) == 3
+        and any(component != 0 for component in velocity)
+        and target.get("cooperative") is False
+        and target.get("authorized") is False
+        and first_task.get("is_lethal") is False
+    )
+
+
 def observe(subject: str, payload: dict) -> None:
     if subject == "furia.s1.mission-delegation":
-        constraints = payload.get("cuas_constraints") or {}
-        target = constraints.get("target") or {}
-        velocity = target.get("velocity_ned_mm_s")
-        tasks = payload.get("graph", {}).get("tasks") or []
-        first_task = tasks[0] if tasks else {}
-        EXPECTED["delegation_emitted"] = (
-            payload.get("schema") == "furia.s1.mission-delegation"
-            and payload.get("version") == "1.0.0"
-            and payload.get("mission_id") == MISSION_ID
-            and payload.get("authority", {}).get("mode") == "intercept"
-            and payload.get("authority", {}).get("authorization_id") == AUTHORIZATION_ID
-            and target.get("track_id") == ROGUE_TRACK_ID
-            and isinstance(velocity, list)
-            and len(velocity) == 3
-            and any(component != 0 for component in velocity)
-            and target.get("cooperative") is False
-            and target.get("authorized") is False
-            and first_task.get("is_lethal") is False
-        )
+        EXPECTED["delegation_emitted"] = valid_delegation(payload)
+    elif subject == "cuas.mission.delegation":
+        EXPECTED["delegation_projected"] = valid_delegation(payload)
     elif subject == "furia.s1.execution-progress":
         if payload.get("mission_id") == MISSION_ID and payload.get("phase") in {"accepted", "active"}:
             EXPECTED["delegation_accepted"] = True
+    elif subject == "cuas.execution.evidence":
+        EXPECTED["execution_evidence"] = (
+            payload.get("plan_revision") == 1
+            and payload.get("state") in {"accepted", "active", "safe_hold", "aborted"}
+            and payload.get("degraded_mode") in {
+                "normal",
+                "stale_remote_tracks",
+                "degraded_navigation",
+                "degraded_communications",
+                "lost_link_continuation",
+                "safety_hold",
+                "return_to_launch",
+            }
+            and isinstance(payload.get("contract_remaining_ms"), int)
+            and payload.get("contract_remaining_ms", -1) >= 0
+            and isinstance(payload.get("track_age_ms"), int)
+            and payload.get("track_age_ms", -1) >= 0
+        )
     elif subject == "swarm.command.abort":
         EXPECTED["abort_command"] = (
             payload.get("version") == "1.0.0"
@@ -82,9 +109,7 @@ def observe(subject: str, payload: dict) -> None:
             and payload.get("source") == "core-safety-policy"
         )
     elif subject == "swarm.command.result.abort":
-        EXPECTED["abort_result"] = (
-            payload.get("mission_id") == MISSION_ID and payload.get("status") == "executed"
-        )
+        EXPECTED["abort_result"] = payload.get("mission_id") == MISSION_ID and payload.get("status") == "executed"
     elif subject == "swarm.fsm.state":
         state = payload.get("state")
         if payload.get("mission_id") == MISSION_ID and state == "ExecutingOpord":
@@ -110,6 +135,8 @@ def main() -> None:
             b"SUB swarm.fsm.state 3\r\n"
             b"SUB swarm.command.abort 4\r\n"
             b"SUB swarm.command.result.abort 5\r\n"
+            b"SUB cuas.mission.delegation 6\r\n"
+            b"SUB cuas.execution.evidence 7\r\n"
             b"PING\r\n"
         )
 
