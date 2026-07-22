@@ -1,0 +1,25 @@
+version: 1
+rules:
+  # Authorized inspection UAS for the Bordeaux-Mérignac demo.
+  # Identity matches the normalized CAT129 form emitted by Core:
+  # uas:<country>:<manufacturer>:<model>:<serial-hex>
+  - identity: "uas:FR:DJI:M30:0102030405060708090a0b0c"
+    valid_from_ms: 0
+    valid_until_ms: 4102444800000
+    volume:
+      min_latitude_e7: 447000000
+      max_latitude_e7: 450000000
+      min_longitude_e7: -9000000
+      max_longitude_e7: -4000000
+      min_altitude_msl_mm: 0
+      max_altitude_msl_mm: 150000
+
+  # Known operator identity whose authorization is intentionally expired.
+  # CAT129 observations for this identity should normalize as cooperative + unauthorized.
+  - identity: "uas:FR:DEMO:EXPIRED:eeeeeeeeeeeeeeeeeeeeeeee"
+    valid_from_ms: 0
+    valid_until_ms: 1
+    volume: null
+
+# Any cooperative CAT129 identity absent from this registry remains
+# "authorization unknown" rather than being implicitly authorized or hostile.
