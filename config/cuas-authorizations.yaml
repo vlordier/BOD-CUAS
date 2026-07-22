@@ -14,9 +14,9 @@ rules:
       min_altitude_msl_mm: 0
       max_altitude_msl_mm: 150000
 
-  # Known operator identity whose authorization is intentionally expired.
-  # CAT129 observations for this identity should normalize as cooperative + unauthorized.
-  - identity: "uas:FR:DEMO:EXPIRED:eeeeeeeeeeeeeeeeeeeeeeee"
+  # CAT129 manufacturer/model fields are three bytes each. This known identity is intentionally
+  # expired so replayed reports normalize as cooperative + unauthorized.
+  - identity: "uas:FR:DEM:EXP:eeeeeeeeeeeeeeeeeeeeeeee"
     valid_from_ms: 0
     valid_until_ms: 1
     volume: null
