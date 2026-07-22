@@ -90,12 +90,13 @@ echo '=== Start Furia C2 on fixed port 5173 ==='
 (cd "$C2" && pnpm install --frozen-lockfile && VITE_NATS_WS_URL="$VITE_NATS_WS_URL" NATS_URL="$NATS_URL" exec pnpm dev --host 127.0.0.1 --port 5173 --strictPort) >"$LOG_DIR/c2.log" 2>&1 & C2_PID=$!; PIDS+=("$C2_PID")
 wait_http http://127.0.0.1:5173 'Furia C2' 90
 
-echo '=== Arm closed-loop + threat-origin acceptance monitors ==='
+echo '=== Arm closed-loop + threat-origin + comm-denied acceptance monitors ==='
 NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/verify.py" >"$LOG_DIR/verify.log" 2>&1 & VERIFY_PID=$!; PIDS+=("$VERIFY_PID")
 NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/verify_origin.py" >"$LOG_DIR/verify-origin.log" 2>&1 & ORIGIN_VERIFY_PID=$!; PIDS+=("$ORIGIN_VERIFY_PID")
+NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/verify_comm_denied.py" >"$LOG_DIR/verify-comm-denied.log" 2>&1 & COMM_VERIFY_PID=$!; PIDS+=("$COMM_VERIFY_PID")
 sleep 0.5
 
-echo '=== Start deterministic operational + ASTERIX/RF/acoustic replay ==='
+echo '=== Start deterministic operational + ASTERIX/RF/acoustic/health replay ==='
 NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 & REPLAY_PID=$!; PIDS+=("$REPLAY_PID")
 
 if ! wait "$VERIFY_PID"; then
@@ -115,6 +116,14 @@ if ! wait "$ORIGIN_VERIFY_PID"; then
   exit 1
 fi
 printf '%-28s ✅\n' 'Threat-origin acceptance'
+if ! wait "$COMM_VERIFY_PID"; then
+  echo 'ERROR: Bordeaux comm-denied acceptance failed.' >&2
+  cat "$LOG_DIR/verify-comm-denied.log" >&2 || true
+  tail -200 "$LOG_DIR/s1-health.log" >&2 || true
+  tail -200 "$LOG_DIR/cuas.log" >&2 || true
+  exit 1
+fi
+printf '%-28s ✅\n' 'Comm-denied acceptance'
 
 if ! wait "$REPLAY_PID"; then
   echo 'ERROR: Bordeaux deterministic replay failed.' >&2
@@ -151,6 +160,7 @@ Timeline:       $SCRIPT_DIR/timeline.yaml
 Replay log:     $LOG_DIR/replay.log
 Verify log:     $LOG_DIR/verify.log
 Origin verify:  $LOG_DIR/verify-origin.log
+Comms verify:   $LOG_DIR/verify-comm-denied.log
 Logs:           $LOG_DIR
 
 Acceptance proved: surveillance -> Core-owned threat-origin/emitter inference -> protected-volume risk/incident -> sensor degradation -> named bounded delegation -> S1 execution evidence -> bounded comm-denied continuation -> recovery -> civilian-safety abort -> final correlated Aborted/SafeHold evidence.
