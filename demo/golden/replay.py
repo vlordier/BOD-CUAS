@@ -12,89 +12,89 @@ from urllib.parse import urlparse
 NATS_URL = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
 SPEED = float(os.environ.get("DEMO_SPEED", "1.0"))
 ASTERIX_SUBJECT = "surveillance.asterix.record"
+MISSION_ID = "perimeter_defense_fob"
+ROGUE_TRACK_ID = "4660"  # CAT015 source track 0x1234 from the bounded fixture.
+
+
+def fixtures() -> list[dict]:
+    return json.loads(Path(__file__).with_name("asterix_records.json").read_text(encoding="utf-8"))
+
+
+def ingress_payload(fixture: dict, record: list[int] | None = None) -> dict:
+    return {
+        "category": fixture["category"],
+        "record": list(record if record is not None else fixture["record"]),
+        "received_at_ms": 0,
+        "altitude_msl_mm": fixture.get("altitude_msl_mm"),
+        "ground_elevation_msl_mm": fixture.get("ground_elevation_msl_mm"),
+        "_fixture_name": fixture["name"],
+    }
 
 
 def load_asterix_events() -> list[tuple[float, str, dict]]:
-    fixtures = json.loads(Path(__file__).with_name("asterix_records.json").read_text(encoding="utf-8"))
     events: list[tuple[float, str, dict]] = []
-    for index, fixture in enumerate(fixtures):
-        events.append(
-            (
-                1.0 + index * 0.25,
-                ASTERIX_SUBJECT,
-                {
-                    "category": fixture["category"],
-                    "record": fixture["record"],
-                    "received_at_ms": 0,
-                    "altitude_msl_mm": fixture.get("altitude_msl_mm"),
-                    "ground_elevation_msl_mm": fixture.get("ground_elevation_msl_mm"),
-                    "_fixture_name": fixture["name"],
-                },
-            )
-        )
+    for index, fixture in enumerate(fixtures()):
+        events.append((1.0 + index * 0.25, ASTERIX_SUBJECT, ingress_payload(fixture)))
     return events
+
+
+def rogue_kinematic_events() -> list[tuple[float, str, dict]]:
+    """Emit two fresh CAT015 position samples so Core can derive real track velocity."""
+    fixture = next(item for item in fixtures() if item["name"] == "non-cooperative-runway-track")
+    first = list(fixture["record"])
+    second = list(first)
+    # P84 latitude/longitude begin after the compound primary octet at byte 17.
+    # Move both coordinates by 1000 raw WGS-84 units (~9 m each at this latitude).
+    lat = int.from_bytes(bytes(second[18:22]), "big", signed=True) + 1000
+    lon = int.from_bytes(bytes(second[22:26]), "big", signed=True) + 1000
+    second[18:22] = lat.to_bytes(4, "big", signed=True)
+    second[22:26] = lon.to_bytes(4, "big", signed=True)
+    return [
+        (32.0, ASTERIX_SUBJECT, ingress_payload(fixture, first)),
+        (34.0, ASTERIX_SUBJECT, ingress_payload(fixture, second)),
+    ]
+
+
+def stamp_cat015_time_of_day(record: list[int], now_ms: int) -> None:
+    """Patch bounded CAT015 FRN6 to the live 1/128-second UTC time-of-day."""
+    # Fixture layout: 2-byte FSPEC, SAC/SIC, message type, service id, then FRN6 time.
+    raw = ((now_ms % 86_400_000) * 128 // 1000) & 0xFFFFFF
+    record[7:10] = [(raw >> 16) & 0xFF, (raw >> 8) & 0xFF, raw & 0xFF]
 
 
 EVENTS = [
     (0.0, "scenario.status", {"id": "bod-cuas-golden", "state": "running", "tick": 0, "elapsed_sec": 0}),
     *load_asterix_events(),
-    (5.0, "operator.timeline", {"event": "authorized_uas_detected", "track_id": "uas-authorized-01", "authorization": "authorized", "severity": "info"}),
-    (10.0, "operator.timeline", {"event": "unknown_cooperative_uas", "track_id": "uas-unknown-01", "authorization": "unknown", "severity": "attention"}),
-    (18.0, "operator.timeline", {"event": "known_uas_unauthorized", "track_id": "uas-expired-01", "authorization": "unauthorized", "severity": "high"}),
-    (20.0, "operator.timeline", {"event": "rogue_uas_detected", "track_id": "uas-rogue-042", "severity": "high", "sensors": ["radar-low-altitude", "eo-ir"]}),
-    (30.0, "cuas.risk.protected_volume", {
-        "track_id": "uas-rogue-042", "assessed_at_ms": 30_000, "threat_state": "credible_threat",
-        "confidence_permille": 900, "authorization_known": False, "authorized": None,
-        "sensor_coverage_degraded": False, "affected_runways_or_sectors": ["RWY23"],
-        "intersections": [{"volume_id": "approach-rwy23", "runway_or_sector": "RWY23", "horizon_sec": 60,
-            "predicted_entry_in_ms": 37_000, "predicted_exit_in_ms": 52_000,
-            "minimum_horizontal_margin_mm": -1_000, "minimum_vertical_margin_mm": 2_000}],
-        "recommendation": "protect_volume", "rationale_codes": ["non_cooperative", "protected_volume_intersection"],
-    }),
-    (32.0, "operator.timeline", {"event": "sensor_degraded", "sensor": "radar-low-altitude", "connection_status": "degraded", "coverage_degraded": True}),
-    (33.0, "cuas.risk.protected_volume", {
-        "track_id": "uas-rogue-042", "assessed_at_ms": 33_000, "threat_state": "credible_threat",
-        "confidence_permille": 700, "authorization_known": False, "authorized": None,
-        "sensor_coverage_degraded": True, "affected_runways_or_sectors": ["RWY23"],
-        "intersections": [{"volume_id": "approach-rwy23", "runway_or_sector": "RWY23", "horizon_sec": 60,
-            "predicted_entry_in_ms": 34_000, "predicted_exit_in_ms": 49_000,
-            "minimum_horizontal_margin_mm": -1_000, "minimum_vertical_margin_mm": 2_000}],
-        "recommendation": "protect_volume", "rationale_codes": ["protected_volume_intersection", "sensor_coverage_degraded"],
-    }),
-    (35.0, "furia.s1.mission-delegation", {
-        "schema": "furia.s1.mission-delegation",
-        "version": "1.0.0",
-        "mission_id": "cuas_bod_airport",
-        "plan_id": "bod-cuas-shadow-plan",
-        "plan_revision": 1,
-        "correlation_id": "bod-cuas-001",
-        "dispatched_at_ms": 35_000,
-        "valid_until_ms": 75_000,
-        "authority": {"mode": "intercept", "authorization_id": "exercise-authority"},
-        "lost_link_policy": "continue_then_rtl",
-        "cuas_constraints": None,
-        "graph": {"tasks": [{"id": "shadow-rogue-042", "effect": "track_and_shadow", "target": "uas-rogue-042"}]},
-    }),
-    (40.0, "cuas.incident.state", {
-        "incident_id": "bod-cuas-001", "updated_at_ms": 40_000, "primary_track_id": "uas-rogue-042",
-        "threat_state": "credible_threat", "affected_runways_or_sectors": ["RWY23"],
-        "recommendation": "restrict_affected_runway_or_sector", "operator_acknowledgement_required": True,
-        "mitigation_authorized": False, "decision_authority": None, "audit_reason": "protected-volume risk confirmed",
-    }),
-    (45.0, "operator.action.authorized", {"action": "bounded_intercept_shadow", "track_id": "uas-rogue-042", "operator": "demo-operator", "decision_authority": "exercise-authority", "authorized": True}),
-    (62.0, "operator.timeline", {"event": "second_rogue_uas_detected", "track_id": "uas-rogue-043", "severity": "high"}),
-    (70.0, "s1.execution.degraded", {"mode": "degraded_communications", "continuation": "bounded_by_contract_expiry", "authority_valid_until_ms": 75_000}),
-    (75.0, "s1.execution.evidence", {"track_id": "uas-rogue-042", "degraded_mode": "communications_lost", "rejection_reason": "authority_expired", "safe_recovery": False}),
-    (80.0, "safety.civilian_aircraft_conflict", {"flight_id": "AFR762", "track_id": "uas-rogue-042", "policy": "BOD-RWY-FRATRICIDE-003"}),
-    (81.0, "operator.action.abort", {"action": "bounded_intercept_shadow", "reason": "civilian_aircraft_conflict", "policy": "BOD-RWY-FRATRICIDE-003"}),
-    (88.0, "s1.execution.evidence", {"track_id": "uas-rogue-042", "degraded_mode": "safety_hold", "rejection_reason": "safety_invariant_unavailable", "safe_recovery": True}),
-    (95.0, "cuas.incident.state", {
-        "incident_id": "bod-cuas-001", "updated_at_ms": 95_000, "primary_track_id": "uas-rogue-042",
-        "threat_state": "resolved", "affected_runways_or_sectors": [], "recommendation": "none",
-        "operator_acknowledgement_required": False, "mitigation_authorized": False, "decision_authority": None,
-        "audit_reason": "safe-recovery-confirmed",
-    }),
-    (100.0, "scenario.status", {"id": "bod-cuas-golden", "state": "complete", "tick": 100, "elapsed_sec": 100}),
+    (20.0, "operator.timeline", {"event": "rogue_uas_detected", "track_id": ROGUE_TRACK_ID, "severity": "high"}),
+    (30.0, "safety.runway_incursion_predicted", {"track_id": ROGUE_TRACK_ID, "runway": "05/23", "eta_s": 37}),
+    *rogue_kinematic_events(),
+    # The replay never publishes directly to S1. Core consumes this explicit named
+    # authorization and creates the bounded/versioned mission delegation from the
+    # fresh normalized CAT015 track state above.
+    (
+        35.0,
+        "operator.action.authorized",
+        {
+            "action": "intercept",
+            "track_id": ROGUE_TRACK_ID,
+            "operator": "demo-operator",
+            "authorization_id": "bod-demo-auth-4660",
+            "authorized": True,
+        },
+    ),
+    # This is deliberately the only abort stimulus. Core policy converts it into
+    # the canonical swarm.command.abort command.
+    (
+        80.0,
+        "safety.civilian_aircraft_conflict",
+        {
+            "mission_id": MISSION_ID,
+            "flight_id": "AFR762",
+            "track_id": ROGUE_TRACK_ID,
+            "policy": "BOD-RWY-FRATRICIDE-003",
+        },
+    ),
+    (95.0, "scenario.status", {"id": "bod-cuas-golden", "state": "complete", "tick": 95, "elapsed_sec": 95}),
 ]
 
 
@@ -113,7 +113,7 @@ def main() -> None:
         sock.sendall(b'CONNECT {"verbose":false,"pedantic":false,"lang":"python-stdlib","version":"1"}\r\nPING\r\n')
         _ = sock.recv(4096)
         start = time.monotonic()
-        for at_s, subject, source_payload in EVENTS:
+        for at_s, subject, source_payload in sorted(EVENTS, key=lambda event: event[0]):
             deadline = start + at_s / SPEED
             delay = deadline - time.monotonic()
             if delay > 0:
@@ -122,7 +122,11 @@ def main() -> None:
             payload = dict(source_payload)
             fixture_name = payload.pop("_fixture_name", None)
             if subject == ASTERIX_SUBJECT:
-                payload["received_at_ms"] = int(time.time() * 1000)
+                now_ms = int(time.time() * 1000)
+                payload["received_at_ms"] = now_ms
+                payload["record"] = list(payload["record"])
+                if payload["category"] == 15:
+                    stamp_cat015_time_of_day(payload["record"], now_ms)
 
             publish(sock, subject, payload)
             sock.sendall(b"PING\r\n")

@@ -47,6 +47,7 @@ fi
 wait_tcp 127.0.0.1 4222 'NATS JetStream'
 export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
 export UXV_CONFIG_DIR="${UXV_CONFIG_DIR:-$SCRIPT_DIR/../../config}"
+export DEMO_SPEED="${DEMO_SPEED:-4.0}"
 
 echo '=== Build Core + S1 demo services ==='
 (
@@ -84,8 +85,23 @@ echo '=== Start Furia C2 ==='
 ) >"$LOG_DIR/c2.log" 2>&1 & PIDS+=("$!")
 wait_http http://127.0.0.1:5173 'Furia C2' 90
 
+echo '=== Arm closed-loop acceptance monitor ==='
+NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/verify.py" >"$LOG_DIR/verify.log" 2>&1 &
+VERIFY_PID=$!
+PIDS+=("$VERIFY_PID")
+sleep 0.5
+
 echo '=== Start deterministic operational + ASTERIX replay ==='
-NATS_URL="$NATS_URL" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 & PIDS+=("$!")
+NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 &
+REPLAY_PID=$!
+PIDS+=("$REPLAY_PID")
+
+if ! wait "$VERIFY_PID"; then
+  echo 'ERROR: Bordeaux golden demo acceptance failed.' >&2
+  cat "$LOG_DIR/verify.log" >&2 || true
+  exit 1
+fi
+printf '%-28s ✅\n' 'Closed-loop acceptance'
 
 cat <<EOF
 
@@ -101,11 +117,11 @@ ASTERIX:    CAT016 + CAT129 authorized/unknown/unauthorized + CAT015 + CAT063
 Auth config: $UXV_CONFIG_DIR/cuas-authorizations.yaml
 Timeline:   $SCRIPT_DIR/timeline.yaml
 Replay log: $LOG_DIR/replay.log
+Verify log: $LOG_DIR/verify.log
 Logs:       $LOG_DIR
 
 Transport policy: NATS JetStream only. No Zenoh transport is used by the golden path.
-The replay feeds real normalized ASTERIX ingress and submits a real S1 swarm intent; S1 owns
-plan/FSM event emission consumed by C2.
+Acceptance proved: canonical S1 delegation -> executing FSM -> Core policy abort -> S1 abort result -> Aborted/SafeHold FSM.
 Press Ctrl-C to stop all demo processes.
 EOF
 wait
