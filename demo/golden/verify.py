@@ -12,6 +12,8 @@ NATS_URL = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
 SPEED = max(float(os.environ.get("DEMO_SPEED", "4.0")), 0.01)
 TIMEOUT = 120.0 / SPEED + 30.0
 MISSION_ID = "perimeter_defense_fob"
+ROGUE_TRACK_ID = "4660"
+AUTHORIZATION_ID = "bod-demo-auth-4660"
 
 EXPECTED = {
     "delegation_emitted": False,
@@ -49,12 +51,20 @@ def read_exact(sock: socket.socket, buf: bytearray, size: int) -> bytes:
 
 def observe(subject: str, payload: dict) -> None:
     if subject == "furia.s1.mission-delegation":
+        target = payload.get("cuas_constraints", {}).get("target", {})
+        velocity = target.get("velocity_ned_mm_s")
         EXPECTED["delegation_emitted"] = (
             payload.get("schema") == "furia.s1.mission-delegation"
             and payload.get("version") == "1.0.0"
             and payload.get("mission_id") == MISSION_ID
             and payload.get("authority", {}).get("mode") == "intercept"
-            and payload.get("authority", {}).get("authorization_id") == "bod-demo-auth-042"
+            and payload.get("authority", {}).get("authorization_id") == AUTHORIZATION_ID
+            and target.get("track_id") == ROGUE_TRACK_ID
+            and isinstance(velocity, list)
+            and len(velocity) == 3
+            and any(component != 0 for component in velocity)
+            and target.get("cooperative") is False
+            and target.get("authorized") is False
             and payload.get("graph", {}).get("tasks", [{}])[0].get("is_lethal") is False
         )
     elif subject == "furia.s1.execution-progress":
