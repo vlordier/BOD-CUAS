@@ -2,6 +2,7 @@
 set -euo pipefail
 ROOT="${FURIA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REVISION_FILE="$SCRIPT_DIR/required-revisions.env"
 fail=0
 check_dir() {
   local name="$1" path="$2"
@@ -43,6 +44,17 @@ check_git_repo() {
     fail=1
   fi
 }
+check_required_revisions() {
+  local name="$1" path="$2" revisions="$3" revision
+  for revision in $revisions; do
+    if git -C "$path" cat-file -e "${revision}^{commit}" 2>/dev/null && git -C "$path" merge-base --is-ancestor "$revision" HEAD 2>/dev/null; then
+      printf '%-28s ✅ includes %.12s\n' "$name" "$revision"
+    else
+      printf '%-28s ❌ missing required %.12s\n' "$name" "$revision"
+      fail=1
+    fi
+  done
+}
 
 printf 'Furia Bordeaux golden demo doctor\n\n'
 check_dir 'BOD-CUAS' "$ROOT/BOD-CUAS"
@@ -60,6 +72,7 @@ check_file 'golden verifier' "$SCRIPT_DIR/verify.py"
 check_file 'origin verifier' "$SCRIPT_DIR/verify_origin.py"
 check_file 'comm-denied verifier' "$SCRIPT_DIR/verify_comm_denied.py"
 check_file 'threat-origin profile' "$SCRIPT_DIR/threat-origin.yaml"
+check_file 'required revisions' "$REVISION_FILE"
 check_file 'S1 health injector source' "$ROOT/S1/tools/s1-sim-server/src/bin/cuas-health-injector.rs"
 check_file 'C2 package manifest' "$ROOT/furia-c2/package.json"
 check_file 'C2 pnpm lockfile' "$ROOT/furia-c2/pnpm-lock.yaml"
@@ -83,6 +96,16 @@ if command -v git >/dev/null 2>&1; then
   check_git_repo 'furia-ui revision' "$ROOT/furia-ui"
   check_git_repo 'furia-c2 revision' "$ROOT/furia-c2"
   check_git_repo 'S1 revision' "$ROOT/S1"
+
+  if [[ -f "$REVISION_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$REVISION_FILE"
+    printf '\nRequired feature ancestry\n'
+    check_required_revisions 'furia-core feature' "$ROOT/furia-core" "${FURIA_CORE_REQUIRED_REVISIONS:-}"
+    check_required_revisions 'furia-ui feature' "$ROOT/furia-ui" "${FURIA_UI_REQUIRED_REVISIONS:-}"
+    check_required_revisions 'furia-c2 feature' "$ROOT/furia-c2" "${FURIA_C2_REQUIRED_REVISIONS:-}"
+    check_required_revisions 'S1 feature' "$ROOT/S1" "${S1_REQUIRED_REVISIONS:-}"
+  fi
 fi
 
 if command -v python3 >/dev/null 2>&1; then
