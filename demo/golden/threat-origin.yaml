@@ -1,0 +1,74 @@
+version: 1
+scenario: bod-cuas-threat-origin
+reference_only: true
+note: >-
+  Synthetic geometry for the Bordeaux demo. It does not claim real sensor
+  placement, coverage, legal authority, or measured performance at Bordeaux Airport.
+
+sensors:
+  rf_df:
+    - id: RF-01
+      mode: [aoa, tdoa]
+      clock_sync: simulated_ptp
+      bearing_sigma_deg: 4.0
+      tdoa_sigma_ns: 35
+    - id: RF-02
+      mode: [aoa, tdoa]
+      clock_sync: simulated_ptp
+      bearing_sigma_deg: 5.0
+      tdoa_sigma_ns: 40
+    - id: RF-03
+      mode: [aoa, tdoa]
+      clock_sync: simulated_ptp
+      bearing_sigma_deg: 6.0
+      tdoa_sigma_ns: 50
+  acoustic:
+    - id: MIC-01
+      mode: [bearing, tdoa, classification]
+      bearing_sigma_deg: 8.0
+    - id: MIC-02
+      mode: [bearing, tdoa, classification]
+      bearing_sigma_deg: 10.0
+    - id: MIC-03
+      mode: [bearing, tdoa, classification]
+      bearing_sigma_deg: 12.0
+
+truth:
+  airborne_track_id: "4660"
+  emitter_id: RF-12
+  launch_zone_id: west-perimeter-launch
+  controller_behavior: mobile
+  autonomous_flight_possible: true
+
+simulation:
+  seed: 42
+  publish_observed_evidence_only: true
+  core_owns_inference: true
+  inject:
+    bearing_noise: true
+    tdoa_noise: true
+    intermittent_rf: true
+    multipath_outliers: true
+    acoustic_dropout: true
+    sensor_negative_evidence: true
+
+expected_outputs:
+  - subject: cuas.emitter.localization
+    requirements:
+      - uncertainty_ellipse_required
+      - localization_methods_required
+      - evidence_references_required
+      - association_to_air_track_is_probabilistic
+  - subject: cuas.threat.origin
+    requirements:
+      - multiple_launch_hypotheses_allowed
+      - probability_mass_lte_one
+      - first_observation_distinct_from_launch_origin
+      - controller_location_distinct_from_launch_origin
+      - inference_version_required
+
+safety:
+  never_auto_authorize_mitigation: true
+  never_publish_exact_truth_as_estimate: true
+  no_live_rf_collection: true
+  no_real_person_tracking: true

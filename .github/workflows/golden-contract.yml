@@ -15,7 +15,7 @@ jobs:
           python-version: '3.12'
       - name: Check script syntax
         run: |
-          python -m py_compile demo/golden/replay.py demo/golden/verify.py
+          python -m py_compile demo/golden/replay.py demo/golden/verify.py demo/golden/verify_origin.py
           bash -n demo/golden/doctor.sh demo/golden/run.sh demo/golden/smoke.sh
       - name: Enforce canonical authority path
         shell: bash
@@ -30,6 +30,8 @@ jobs:
           grep -Fq 'record[6:9]' demo/golden/replay.py
           ! grep -Fq 'record[7:10]' demo/golden/replay.py
           grep -q '"safety.civilian_aircraft_conflict"' demo/golden/replay.py
+          grep -q 'surveillance.origin.bearing' demo/golden/replay.py
+          grep -q 'surveillance.origin.tdoa_fix' demo/golden/replay.py
           grep -q 'SUB furia.s1.mission-delegation' demo/golden/verify.py
           grep -q 'SUB furia.s1.execution-progress' demo/golden/verify.py
           grep -q 'SUB swarm.command.abort' demo/golden/verify.py
@@ -41,6 +43,15 @@ jobs:
           grep -q 'assert_causal_order' demo/golden/verify.py
           grep -q 'Aborted' demo/golden/verify.py
           grep -q 'SafeHold' demo/golden/verify.py
+      - name: Verify threat-origin evidence contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'SUB cuas.emitter.localization' demo/golden/verify_origin.py
+          grep -q 'SUB cuas.threat.origin' demo/golden/verify_origin.py
+          grep -q 'Core delegated before valid emitter + launch-origin evidence' demo/golden/verify_origin.py
+          grep -q 'never_auto_authorize_mitigation: true' demo/golden/threat-origin.yaml
+          grep -q 'publish_observed_evidence_only: true' demo/golden/threat-origin.yaml
       - name: Verify one-command smoke contract
         shell: bash
         run: |
@@ -48,6 +59,7 @@ jobs:
           grep -q 'GOLDEN_EXIT_AFTER_ACCEPTANCE=1' demo/golden/smoke.sh
           grep -q 'exec bash "$SCRIPT_DIR/run.sh"' demo/golden/smoke.sh
           grep -q 'wait "$VERIFY_PID"' demo/golden/run.sh
+          grep -q 'wait "$ORIGIN_VERIFY_PID"' demo/golden/run.sh
           grep -q 'wait "$REPLAY_PID"' demo/golden/run.sh
           grep -q 'Post-scenario liveness' demo/golden/run.sh
           grep -q 'SMOKE RESULT: PASS' demo/golden/run.sh
