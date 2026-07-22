@@ -9,7 +9,7 @@ import time
 from urllib.parse import urlparse
 
 NATS_URL = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
-SPEED = max(float(os.environ.get("DEMO_SPEED", "1.0")), 0.01)
+SPEED = max(float(os.environ.get("DEMO_SPEED", "4.0")), 0.01)
 TIMEOUT = 120.0 / SPEED + 30.0
 
 EXPECTED = {
@@ -57,10 +57,7 @@ def observe(subject: str, payload: dict) -> None:
             and payload.get("source") == "core-safety-policy"
         )
     elif subject == "swarm.command.result.abort":
-        EXPECTED["abort_result"] = payload.get("status") in {
-            "executed",
-            "accepted_no_active_run",
-        }
+        EXPECTED["abort_result"] = payload.get("status") == "executed"
     elif subject == "swarm.fsm.state":
         state = payload.get("state")
         if state == "ExecutingOpord":
@@ -91,9 +88,7 @@ def main() -> None:
         while time.monotonic() < deadline and not all(EXPECTED.values()):
             try:
                 line = read_line(sock, buf)
-            except TimeoutError:
-                continue
-            except socket.timeout:
+            except (TimeoutError, socket.timeout):
                 continue
 
             if line == b"PING":
