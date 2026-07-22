@@ -83,8 +83,25 @@ echo '=== Start Furia C2 ==='
 ) >"$LOG_DIR/c2.log" 2>&1 & PIDS+=("$!")
 wait_http http://127.0.0.1:5173 'Furia C2' 90
 
+echo '=== Arm closed-loop acceptance monitor ==='
+NATS_URL="$NATS_URL" DEMO_SPEED="${DEMO_SPEED:-1.0}" python3 "$SCRIPT_DIR/verify.py" >"$LOG_DIR/verify.log" 2>&1 &
+VERIFY_PID=$!
+PIDS+=("$VERIFY_PID")
+sleep 0.5
+
 echo '=== Start deterministic operational replay ==='
-NATS_URL="$NATS_URL" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 & PIDS+=("$!")
+NATS_URL="$NATS_URL" DEMO_SPEED="${DEMO_SPEED:-1.0}" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 &
+REPLAY_PID=$!
+PIDS+=("$REPLAY_PID")
+
+# Do not declare the demo ready until the complete policy -> command -> actuator
+# loop has been observed. This makes the golden path an executable acceptance test.
+if ! wait "$VERIFY_PID"; then
+  echo 'ERROR: Bordeaux golden demo acceptance failed.' >&2
+  cat "$LOG_DIR/verify.log" >&2 || true
+  exit 1
+fi
+printf '%-28s ✅\n' 'Closed-loop acceptance'
 
 cat <<EOF
 
@@ -98,10 +115,11 @@ S1:         http://127.0.0.1:3227
 SAPIENT:    publishing to JetStream stream FURIA_CUAS
 Timeline:   $SCRIPT_DIR/timeline.yaml
 Replay log: $LOG_DIR/replay.log
+Verify log: $LOG_DIR/verify.log
 Logs:       $LOG_DIR
 
 Transport policy: NATS JetStream only. No Zenoh transport is used by the golden path.
-The replay submits a real S1 swarm intent; S1 owns plan/FSM event emission consumed by C2.
+Acceptance proved: S1 plan -> executing FSM -> Core policy abort -> S1 abort result -> Aborted/SafeHold FSM.
 Press Ctrl-C to stop all demo processes.
 EOF
 wait
