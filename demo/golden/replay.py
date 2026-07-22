@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 NATS_URL = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
 SPEED = float(os.environ.get("DEMO_SPEED", "1.0"))
 ASTERIX_SUBJECT = "surveillance.asterix.record"
-MISSION_ID = "cuas_bod_airport"
+MISSION_ID = "perimeter_defense_fob"
 
 
 def load_asterix_events() -> list[tuple[float, str, dict]]:
@@ -41,34 +41,21 @@ EVENTS = [
     *load_asterix_events(),
     (20.0, "operator.timeline", {"event": "rogue_uas_detected", "track_id": "uas-rogue-042", "severity": "high"}),
     (30.0, "safety.runway_incursion_predicted", {"track_id": "uas-rogue-042", "runway": "05/23", "eta_s": 37}),
+    # The replay never publishes directly to S1. Core consumes this explicit named
+    # authorization and creates the bounded/versioned mission delegation.
     (
         35.0,
-        "furia.s1.mission-delegation",
+        "operator.action.authorized",
         {
-            "schema": "furia.s1.mission-delegation",
-            "version": "1.0.0",
-            "mission_id": MISSION_ID,
-            "plan_id": "bod-golden-intercept-1",
-            "plan_revision": 1,
-            "correlation_id": "bod-golden-001",
-            "dispatched_at_ms": 1,
-            "valid_until_ms": None,
-            "authority": {"mode": "intercept", "authorization_id": "demo-auth-001"},
-            "lost_link_policy": "continue_then_rtl",
-            "cuas_constraints": {
-                "target_track_id": "uas-rogue-042",
-                "runway": "05/23",
-                "stand_off_m": 150,
-            },
-            "graph": {
-                "tasks": [
-                    {"id": "acquire", "type": "acquire_track", "track_id": "uas-rogue-042"},
-                    {"id": "intercept", "type": "intercept", "depends_on": ["acquire"]},
-                ]
-            },
+            "action": "intercept",
+            "track_id": "uas-rogue-042",
+            "operator": "demo-operator",
+            "authorization_id": "bod-demo-auth-042",
+            "authorized": True,
         },
     ),
-    (45.0, "operator.action.authorized", {"action": "intercept", "track_id": "uas-rogue-042", "operator": "demo-operator", "authorized": True}),
+    # This is deliberately the only abort stimulus. Core policy converts it into
+    # the canonical swarm.command.abort command.
     (
         80.0,
         "safety.civilian_aircraft_conflict",
