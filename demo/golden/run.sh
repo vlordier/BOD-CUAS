@@ -46,6 +46,7 @@ else
 fi
 wait_tcp 127.0.0.1 4222 'NATS JetStream'
 export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
+export UXV_CONFIG_DIR="${UXV_CONFIG_DIR:-$SCRIPT_DIR/../../config}"
 
 echo '=== Build Core + S1 demo services ==='
 (
@@ -60,7 +61,7 @@ echo '=== Build Core + S1 demo services ==='
 echo '=== Start Core C-UAS services ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & PIDS+=("$!")
 NATS_URL="$NATS_URL" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.log" 2>&1 & PIDS+=("$!")
-NATS_URL="$NATS_URL" "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas.log" 2>&1 & PIDS+=("$!")
+NATS_URL="$NATS_URL" UXV_CONFIG_DIR="$UXV_CONFIG_DIR" "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas.log" 2>&1 & PIDS+=("$!")
 wait_http http://127.0.0.1:8080/health 'ATAK dev server'
 wait_http http://127.0.0.1:3000/health 'Furia Core'
 wait_http http://127.0.0.1:3475/health 'C-UAS director'
@@ -83,7 +84,7 @@ echo '=== Start Furia C2 ==='
 ) >"$LOG_DIR/c2.log" 2>&1 & PIDS+=("$!")
 wait_http http://127.0.0.1:5173 'Furia C2' 90
 
-echo '=== Start deterministic operational replay ==='
+echo '=== Start deterministic operational + ASTERIX replay ==='
 NATS_URL="$NATS_URL" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 & PIDS+=("$!")
 
 cat <<EOF
@@ -96,12 +97,15 @@ C2:         http://127.0.0.1:5173
 C-UAS:      http://127.0.0.1:3475
 S1:         http://127.0.0.1:3227
 SAPIENT:    publishing to JetStream stream FURIA_CUAS
+ASTERIX:    CAT016 + CAT129 authorized/unknown/unauthorized + CAT015 + CAT063
+Auth config: $UXV_CONFIG_DIR/cuas-authorizations.yaml
 Timeline:   $SCRIPT_DIR/timeline.yaml
 Replay log: $LOG_DIR/replay.log
 Logs:       $LOG_DIR
 
 Transport policy: NATS JetStream only. No Zenoh transport is used by the golden path.
-The replay submits a real S1 swarm intent; S1 owns plan/FSM event emission consumed by C2.
+The replay feeds real normalized ASTERIX ingress and submits a real S1 swarm intent; S1 owns
+plan/FSM event emission consumed by C2.
 Press Ctrl-C to stop all demo processes.
 EOF
 wait
