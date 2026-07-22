@@ -53,17 +53,15 @@ def degraded_sensor_event() -> tuple[float, str, dict]:
 
 def origin_evidence_events() -> list[tuple[float, str, dict]]:
     """Synthetic observations only; values intentionally include uncertainty and do not expose simulator truth."""
-    base = {
-        "track_id": ROGUE_TRACK_ID,
-        "emitter_id": "RF-12",
-        "observed_at_ms": 0,
-        "acoustic": False,
-    }
+    base = {"track_id": ROGUE_TRACK_ID, "emitter_id": "RF-12", "observed_at_ms": 0, "acoustic": False}
     bearings = [
         (22.0, {**base, "sensor_id": "RF-01", "sensor_latitude_e7": 448_300_000, "sensor_longitude_e7": -7_500_000, "bearing_mdeg": 101_000, "sigma_mdeg": 4_000}),
         (22.4, {**base, "sensor_id": "RF-02", "sensor_latitude_e7": 448_250_000, "sensor_longitude_e7": -6_900_000, "bearing_mdeg": 286_000, "sigma_mdeg": 5_000}),
         (22.8, {**base, "sensor_id": "RF-03", "sensor_latitude_e7": 448_360_000, "sensor_longitude_e7": -7_100_000, "bearing_mdeg": 204_000, "sigma_mdeg": 6_000}),
         (23.2, {**base, "sensor_id": "MIC-01", "sensor_latitude_e7": 448_315_000, "sensor_longitude_e7": -7_300_000, "bearing_mdeg": 138_000, "sigma_mdeg": 8_000, "acoustic": True}),
+        # Refresh after Core has derived non-zero CAT015 velocity: this upgrades launch inference
+        # from first-detection vicinity to explicit trajectory back-projection hypotheses.
+        (34.2, {**base, "sensor_id": "RF-01", "sensor_latitude_e7": 448_300_000, "sensor_longitude_e7": -7_500_000, "bearing_mdeg": 102_000, "sigma_mdeg": 4_000}),
     ]
     tdoa = (
         24.0,
