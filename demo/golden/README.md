@@ -8,10 +8,16 @@ From sibling checkouts of `BOD-CUAS`, `furia-core`, `furia-ui`, `furia-c2`, and 
 
 ```bash
 cd BOD-CUAS
-bash demo/golden/run.sh
+bash demo/golden/smoke.sh
 ```
 
-The first milestone boots the real Core C-UAS services and the real Furia C2 host. The scenario timeline is fixed by `timeline.yaml` so subsequent integration work has one stable target rather than ad-hoc manual demos.
+That single command boots the real NATS JetStream backbone, Core C-UAS services, S1 simulation/runtime boundary, and Furia C2 host; replays the deterministic Bordeaux ASTERIX/operational scenario; verifies the live command/evidence/abort chain in causal order; checks that the replay and long-running services stayed alive; then shuts everything down and exits `0` only on acceptance success.
+
+For an interactive demo that remains running after acceptance:
+
+```bash
+bash demo/golden/run.sh
+```
 
 ## Repository layout expected
 
@@ -30,18 +36,49 @@ Set `FURIA_ROOT=/path/to/root` when using another layout.
 
 ```bash
 bash demo/golden/doctor.sh
+bash demo/golden/smoke.sh
 bash demo/golden/run.sh
 ```
 
 `run.sh` builds and starts:
 
+- NATS JetStream on `:4222`
 - `dev-atak-server` on `:8080`
 - `furia-core-server` on `:3000`
 - `counter-uas-director` on `:3475`
-- `sapient-simulator` on `:3476`
+- `sapient-simulator`
+- `s1-sim-server` on `:3227`
 - `furia-c2` Vite host on `:5173`
 
-All child processes are terminated together on Ctrl-C.
+All child processes are terminated together on exit or Ctrl-C.
+
+## Smoke acceptance chain
+
+The live verifier requires the real subjects and validates their causal relationships:
+
+```text
+ASTERIX + named operator authorization
+          ↓
+furia.s1.mission-delegation
+          ↓
+cuas.mission.delegation
+          ↓
+furia.s1.execution-progress
+          ↓
+cuas.execution.evidence
+          ↓
+swarm.fsm.state = ExecutingOpord
+          ↓
+safety.civilian_aircraft_conflict
+          ↓
+swarm.command.abort
+          ↓
+swarm.fsm.state = Aborted / SafeHold
+          ↓
+swarm.command.result.abort = executed
+```
+
+The harness never publishes S1 delegation, execution evidence, or abort commands directly. Those must be produced by the authoritative runtime path.
 
 ## Acceptance story
 
@@ -49,14 +86,21 @@ All child processes are terminated together on Ctrl-C.
 2. An authorized UAS is identified and not escalated.
 3. A non-cooperative UAS is detected and normalized into the operational stream.
 4. Predicted runway incursion raises threat state.
-5. Core resolves an S1 swarm capability and produces a candidate intercept plan.
+5. Core resolves an S1 swarm capability and produces a bounded candidate intercept plan.
 6. Operator explicitly authorizes the consequential action.
-7. S1 execution state is rendered through `OperationalEventStream`.
-8. A civilian-aircraft conflict triggers `BOD-RWY-FRATRICIDE-003` and aborts/holds the swarm.
-9. The operator timeline records detection, decision, authorization, execution, and abort evidence.
+7. Core delegates through `MissionDelegationV1`; S1 admits it and emits correlated execution evidence.
+8. Core admits/normalizes that evidence and exposes the read-only operator execution plane used by C2.
+9. A civilian-aircraft conflict triggers `BOD-RWY-FRATRICIDE-003` and the canonical abort path.
+10. S1 enters `Aborted` / `SafeHold`, publishes an executed abort result, and the smoke verifier accepts only the correctly ordered chain.
 
 ## Definition of done
 
-The demo is complete when a fresh machine can run one command and observe the entire deterministic story without manually editing configs or publishing messages.
+A fresh machine with the five sibling repositories can run:
+
+```bash
+bash demo/golden/smoke.sh
+```
+
+and receive `SMOKE RESULT: PASS` without manually editing configs, publishing NATS messages, starting services, or cleaning up processes.
 
 The authoritative contracts remain in `furia-core`; this directory owns only the Bordeaux scenario fixtures, orchestration, and acceptance timeline.
