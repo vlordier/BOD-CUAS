@@ -1,0 +1,43 @@
+version: 1
+scenario: bod-cuas-golden
+seed: 42
+clock: deterministic
+steps:
+  - at_s: 0
+    id: scenario-start
+    event: scenario.started
+  - at_s: 5
+    id: authorized-uas
+    event: surveillance.authorized_uas
+    track_id: uas-authorized-01
+  - at_s: 20
+    id: rogue-detected
+    event: surveillance.noncooperative_uas
+    track_id: uas-rogue-042
+  - at_s: 30
+    id: runway-risk
+    event: cuas.runway_incursion_predicted
+    runway: "05/23"
+    eta_s: 37
+  - at_s: 35
+    id: plan-ready
+    event: swarm.plan.ready
+    interceptors: 2
+  - at_s: 45
+    id: operator-authorized
+    event: operator.action.authorized
+    action: intercept
+  - at_s: 50
+    id: swarm-execute
+    event: swarm.execution.started
+  - at_s: 80
+    id: civilian-conflict
+    event: safety.civilian_aircraft_conflict
+    flight_id: AFR762
+  - at_s: 81
+    id: automatic-abort
+    event: swarm.execution.aborted
+    policy: BOD-RWY-FRATRICIDE-003
+  - at_s: 95
+    id: scenario-complete
+    event: scenario.completed
