@@ -16,6 +16,9 @@ ROGUE_TRACK_ID = "4660"
 AUTHORIZATION_ID = "bod-demo-auth-4660"
 
 EXPECTED = {
+    "risk_event": False,
+    "incident_event": False,
+    "sensor_degradation_visible": False,
     "delegation_emitted": False,
     "delegation_projected": False,
     "delegation_accepted": False,
@@ -75,7 +78,30 @@ def valid_delegation(payload: dict) -> bool:
 
 
 def observe(subject: str, payload: dict) -> None:
-    if subject == "furia.s1.mission-delegation":
+    if subject == "cuas.risk.protected_volume":
+        intersections = payload.get("intersections") or []
+        horizons = {item.get("horizon_sec") for item in intersections if isinstance(item, dict)}
+        core_risk_valid = (
+            payload.get("track_id") == ROGUE_TRACK_ID
+            and payload.get("threat_state") == "credible_threat"
+            and payload.get("recommendation") == "protect_volume"
+            and "05/23" in (payload.get("affected_runways_or_sectors") or [])
+            and {60, 120}.issubset(horizons)
+            and payload.get("authorized") is False
+        )
+        EXPECTED["risk_event"] = EXPECTED["risk_event"] or core_risk_valid
+        if core_risk_valid and payload.get("sensor_coverage_degraded") is True:
+            EXPECTED["sensor_degradation_visible"] = True
+    elif subject == "cuas.incident.state":
+        EXPECTED["incident_event"] = EXPECTED["incident_event"] or (
+            payload.get("primary_track_id") == ROGUE_TRACK_ID
+            and payload.get("threat_state") == "credible_threat"
+            and payload.get("recommendation") == "restrict_affected_runway_or_sector"
+            and payload.get("operator_acknowledgement_required") is True
+            and payload.get("mitigation_authorized") is False
+            and payload.get("decision_authority") is None
+        )
+    elif subject == "furia.s1.mission-delegation":
         EXPECTED["delegation_emitted"] = valid_delegation(payload)
     elif subject == "cuas.mission.delegation":
         EXPECTED["delegation_projected"] = valid_delegation(payload)
@@ -83,7 +109,7 @@ def observe(subject: str, payload: dict) -> None:
         if payload.get("mission_id") == MISSION_ID and payload.get("phase") in {"accepted", "active"}:
             EXPECTED["delegation_accepted"] = True
     elif subject == "cuas.execution.evidence":
-        EXPECTED["execution_evidence"] = (
+        EXPECTED["execution_evidence"] = EXPECTED["execution_evidence"] or (
             payload.get("plan_revision") == 1
             and payload.get("state") in {"accepted", "active", "safe_hold", "aborted"}
             and payload.get("degraded_mode") in {
@@ -137,6 +163,8 @@ def main() -> None:
             b"SUB swarm.command.result.abort 5\r\n"
             b"SUB cuas.mission.delegation 6\r\n"
             b"SUB cuas.execution.evidence 7\r\n"
+            b"SUB cuas.risk.protected_volume 8\r\n"
+            b"SUB cuas.incident.state 9\r\n"
             b"PING\r\n"
         )
 
