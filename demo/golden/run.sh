@@ -77,9 +77,11 @@ wait_http http://127.0.0.1:8080/health 'ATAK dev server'
 wait_http http://127.0.0.1:3000/health 'Furia Core'
 wait_process "$CUAS_PID" 'C-UAS director (NATS-only)' 2
 
-echo '=== Start S1 simulation service on JetStream ==='
+echo '=== Start S1 simulation + bounded health injector ==='
 (cd "$S1" && exec ./target/release/s1-sim-server --nats-url "$NATS_URL" --port 3227) >"$LOG_DIR/s1.log" 2>&1 & S1_PID=$!; PIDS+=("$S1_PID")
+(cd "$S1" && exec ./target/release/cuas-health-injector --nats-url "$NATS_URL") >"$LOG_DIR/s1-health.log" 2>&1 & S1_HEALTH_PID=$!; PIDS+=("$S1_HEALTH_PID")
 wait_http http://127.0.0.1:3227/api/v1/scenarios 'S1 Sim Server' 90
+wait_process "$S1_HEALTH_PID" 'S1 health injector' 2
 
 echo '=== Start SAPIENT simulator on JetStream ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/sapient-simulator" --target-lat 44.8283 --target-lon -0.7156 >"$LOG_DIR/sapient.log" 2>&1 & SAPIENT_PID=$!; PIDS+=("$SAPIENT_PID")
@@ -88,12 +90,13 @@ echo '=== Start Furia C2 on fixed port 5173 ==='
 (cd "$C2" && pnpm install --frozen-lockfile && VITE_NATS_WS_URL="$VITE_NATS_WS_URL" NATS_URL="$NATS_URL" exec pnpm dev --host 127.0.0.1 --port 5173 --strictPort) >"$LOG_DIR/c2.log" 2>&1 & C2_PID=$!; PIDS+=("$C2_PID")
 wait_http http://127.0.0.1:5173 'Furia C2' 90
 
-echo '=== Arm closed-loop + threat-origin acceptance monitors ==='
+echo '=== Arm closed-loop, origin and comm-denied acceptance monitors ==='
 NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/verify.py" >"$LOG_DIR/verify.log" 2>&1 & VERIFY_PID=$!; PIDS+=("$VERIFY_PID")
 NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/verify_origin.py" >"$LOG_DIR/verify-origin.log" 2>&1 & ORIGIN_VERIFY_PID=$!; PIDS+=("$ORIGIN_VERIFY_PID")
+NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/verify_comm_denied.py" >"$LOG_DIR/verify-comm-denied.log" 2>&1 & COMM_VERIFY_PID=$!; PIDS+=("$COMM_VERIFY_PID")
 sleep 0.5
 
-echo '=== Start deterministic operational + ASTERIX/RF/acoustic replay ==='
+echo '=== Start deterministic operational + ASTERIX/RF/acoustic/health replay ==='
 NATS_URL="$NATS_URL" DEMO_SPEED="$DEMO_SPEED" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 & REPLAY_PID=$!; PIDS+=("$REPLAY_PID")
 
 if ! wait "$VERIFY_PID"; then
@@ -112,6 +115,14 @@ if ! wait "$ORIGIN_VERIFY_PID"; then
   exit 1
 fi
 printf '%-28s ✅\n' 'Threat-origin acceptance'
+if ! wait "$COMM_VERIFY_PID"; then
+  echo 'ERROR: Bordeaux comm-denied acceptance failed.' >&2
+  cat "$LOG_DIR/verify-comm-denied.log" >&2 || true
+  tail -200 "$LOG_DIR/s1-health.log" >&2 || true
+  tail -200 "$LOG_DIR/cuas.log" >&2 || true
+  exit 1
+fi
+printf '%-28s ✅\n' 'Comm-denied acceptance'
 
 if ! wait "$REPLAY_PID"; then
   echo 'ERROR: Bordeaux deterministic replay failed.' >&2
@@ -124,6 +135,7 @@ assert_alive "$ATAK_PID" 'ATAK dev server' "$LOG_DIR/dev-atak.log"
 assert_alive "$CORE_PID" 'Furia Core' "$LOG_DIR/core.log"
 assert_alive "$CUAS_PID" 'C-UAS director' "$LOG_DIR/cuas.log"
 assert_alive "$S1_PID" 'S1 Sim Server' "$LOG_DIR/s1.log"
+assert_alive "$S1_HEALTH_PID" 'S1 health injector' "$LOG_DIR/s1-health.log"
 assert_alive "$SAPIENT_PID" 'SAPIENT simulator' "$LOG_DIR/sapient.log"
 assert_alive "$C2_PID" 'Furia C2' "$LOG_DIR/c2.log"
 printf '%-28s ✅\n' 'Post-scenario liveness'
@@ -141,14 +153,16 @@ C-UAS director: NATS-only process (log: $LOG_DIR/cuas.log)
 SAPIENT:        publishing to JetStream
 ASTERIX:        CAT015/016 + CAT021 + CAT048(optional) + CAT062/063 + CAT129
 Origin sensing: synthetic RF AoA/TDOA + acoustic corroboration, uncertainty preserved
+S1 degraded ops: real delegation guard proves bounded lost-link continuation + recovery
 Auth config:    $UXV_CONFIG_DIR/cuas-authorizations.yaml
 Timeline:       $SCRIPT_DIR/timeline.yaml
 Replay log:     $LOG_DIR/replay.log
 Verify log:     $LOG_DIR/verify.log
 Origin verify:  $LOG_DIR/verify-origin.log
+Comms verify:   $LOG_DIR/verify-comm-denied.log
 Logs:           $LOG_DIR
 
-Acceptance proved: surveillance -> Core-owned threat-origin/emitter inference -> protected-volume risk/incident -> sensor degradation -> named bounded delegation -> S1 evidence -> civilian-safety abort -> final correlated Aborted/SafeHold evidence.
+Acceptance proved: surveillance -> Core-owned threat-origin/emitter inference -> protected-volume risk/incident -> sensor degradation -> named bounded delegation -> S1 active -> bounded lost-link continuation -> normal recovery -> civilian-safety abort -> final correlated Aborted/SafeHold evidence.
 EOF
 
 if [[ "${GOLDEN_EXIT_AFTER_ACCEPTANCE:-0}" == "1" ]]; then
