@@ -14,6 +14,7 @@ TIMEOUT = 120.0 / SPEED + 30.0
 MISSION_ID = "perimeter_defense_fob"
 ROGUE_TRACK_ID = "4660"
 AUTHORIZATION_ID = "bod-demo-auth-4660"
+ACTIVE_CONTRACT_ID: str | None = None
 
 EXPECTED = {
     "risk_event": False,
@@ -25,6 +26,7 @@ EXPECTED = {
     "execution_evidence": False,
     "executing": False,
     "abort_command": False,
+    "final_abort_evidence": False,
     "abort_result": False,
     "aborted": False,
 }
@@ -74,6 +76,8 @@ def valid_delegation(payload: dict) -> bool:
         and payload.get("version") == "1.0.0"
         and payload.get("mission_id") == MISSION_ID
         and payload.get("plan_revision") == 1
+        and isinstance(payload.get("correlation_id"), str)
+        and bool(payload.get("correlation_id", "").strip())
         and payload.get("authority", {}).get("mode") == "intercept"
         and payload.get("authority", {}).get("authorization_id") == AUTHORIZATION_ID
         and target.get("track_id") == ROGUE_TRACK_ID
@@ -87,7 +91,7 @@ def valid_delegation(payload: dict) -> bool:
 
 
 def observe(subject: str, payload: dict) -> None:
-    global EVENT_INDEX
+    global EVENT_INDEX, ACTIVE_CONTRACT_ID
     EVENT_INDEX += 1
     if subject == "cuas.risk.protected_volume":
         intersections = payload.get("intersections") or []
@@ -114,7 +118,10 @@ def observe(subject: str, payload: dict) -> None:
             and payload.get("decision_authority") is None,
         )
     elif subject == "furia.s1.mission-delegation":
-        mark("delegation_emitted", valid_delegation(payload))
+        valid = valid_delegation(payload)
+        if valid:
+            ACTIVE_CONTRACT_ID = payload.get("correlation_id")
+        mark("delegation_emitted", valid)
     elif subject == "cuas.mission.delegation":
         mark("delegation_projected", valid_delegation(payload))
     elif subject == "furia.s1.execution-progress":
@@ -123,10 +130,9 @@ def observe(subject: str, payload: dict) -> None:
             payload.get("mission_id") == MISSION_ID and payload.get("phase") in {"accepted", "active"},
         )
     elif subject == "cuas.execution.evidence":
-        mark(
-            "execution_evidence",
+        common_valid = (
             payload.get("plan_revision") == 1
-            and payload.get("state") in {"accepted", "active", "safe_hold", "aborted"}
+            and payload.get("contract_id") == ACTIVE_CONTRACT_ID
             and payload.get("degraded_mode")
             in {
                 "normal",
@@ -140,7 +146,17 @@ def observe(subject: str, payload: dict) -> None:
             and isinstance(payload.get("contract_remaining_ms"), int)
             and payload.get("contract_remaining_ms", -1) >= 0
             and isinstance(payload.get("track_age_ms"), int)
-            and payload.get("track_age_ms", -1) >= 0,
+            and payload.get("track_age_ms", -1) >= 0
+        )
+        mark(
+            "execution_evidence",
+            common_valid and payload.get("state") in {"accepted", "active"},
+        )
+        mark(
+            "final_abort_evidence",
+            common_valid
+            and payload.get("state") == "aborted"
+            and payload.get("degraded_mode") == "safety_hold",
         )
     elif subject == "swarm.command.abort":
         mark(
@@ -174,7 +190,8 @@ def assert_causal_order() -> None:
         ("execution_evidence", "abort_command"),
         ("executing", "abort_command"),
         ("abort_command", "aborted"),
-        ("abort_command", "abort_result"),
+        ("abort_command", "final_abort_evidence"),
+        ("final_abort_evidence", "abort_result"),
     ]
     violations = [
         f"{before} !< {after}"
