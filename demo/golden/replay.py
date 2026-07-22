@@ -58,8 +58,9 @@ def rogue_kinematic_events() -> list[tuple[float, str, dict]]:
 def stamp_cat015_time_of_day(record: list[int], now_ms: int) -> None:
     """Patch bounded CAT015 FRN6 to the live 1/128-second UTC time-of-day."""
     # Fixture layout: 2-byte FSPEC, SAC/SIC, message type, service id, then FRN6 time.
+    # Therefore FRN6 occupies bytes 6..8 (Python slice 6:9).
     raw = ((now_ms % 86_400_000) * 128 // 1000) & 0xFFFFFF
-    record[7:10] = [(raw >> 16) & 0xFF, (raw >> 8) & 0xFF, raw & 0xFF]
+    record[6:9] = [(raw >> 16) & 0xFF, (raw >> 8) & 0xFF, raw & 0xFF]
 
 
 EVENTS = [
