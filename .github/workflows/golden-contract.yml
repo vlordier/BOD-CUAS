@@ -13,9 +13,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Check Python syntax
+      - name: Check script syntax
         run: |
           python -m py_compile demo/golden/replay.py demo/golden/verify.py
+          bash -n demo/golden/doctor.sh demo/golden/run.sh demo/golden/smoke.sh
       - name: Enforce canonical authority path
         shell: bash
         run: |
@@ -35,8 +36,19 @@ jobs:
           grep -q 'SUB swarm.command.result.abort' demo/golden/verify.py
           grep -q 'target.get("track_id") == ROGUE_TRACK_ID' demo/golden/verify.py
           grep -q 'any(component != 0 for component in velocity)' demo/golden/verify.py
+          grep -q 'assert_causal_order' demo/golden/verify.py
           grep -q 'Aborted' demo/golden/verify.py
           grep -q 'SafeHold' demo/golden/verify.py
+      - name: Verify one-command smoke contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'GOLDEN_EXIT_AFTER_ACCEPTANCE=1' demo/golden/smoke.sh
+          grep -q 'exec bash "$SCRIPT_DIR/run.sh"' demo/golden/smoke.sh
+          grep -q 'wait "$VERIFY_PID"' demo/golden/run.sh
+          grep -q 'wait "$REPLAY_PID"' demo/golden/run.sh
+          grep -q 'Post-scenario liveness' demo/golden/run.sh
+          grep -q 'SMOKE RESULT: PASS' demo/golden/run.sh
       - name: Verify no direct abort injection
         shell: bash
         run: |
