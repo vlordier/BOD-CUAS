@@ -35,6 +35,16 @@ class GoldenReplayPolicyTests(unittest.TestCase):
         for action in actions:
             self.assertTrue(action.get("decision_authority"))
 
+    def test_cuas_control_path_uses_versioned_delegation_not_free_text_intent(self) -> None:
+        subjects = [subject for _, subject, _ in EVENTS]
+        self.assertIn("furia.s1.mission-delegation", subjects)
+        self.assertNotIn("swarm.intent.submit", subjects)
+        delegation = self.payloads("furia.s1.mission-delegation")[0]
+        self.assertEqual(delegation["schema"], "furia.s1.mission-delegation")
+        self.assertEqual(delegation["version"], "1.0.0")
+        self.assertGreater(delegation["plan_revision"], 0)
+        self.assertEqual(delegation["authority"]["authorization_id"], "exercise-authority")
+
     def test_civilian_conflict_precedes_abort_and_safe_recovery(self) -> None:
         subjects = [subject for _, subject, _ in EVENTS]
         conflict = subjects.index("safety.civilian_aircraft_conflict")
