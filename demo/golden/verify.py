@@ -11,9 +11,13 @@ from urllib.parse import urlparse
 NATS_URL = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
 SPEED = max(float(os.environ.get("DEMO_SPEED", "4.0")), 0.01)
 TIMEOUT = 120.0 / SPEED + 30.0
+MISSION_ID = "perimeter_defense_fob"
 
 EXPECTED = {
-    "plan_ready": False,
+    "delegated": False,
+    "s1_accepted": False,
+    "s1_active": False,
+    "execution_evidence": False,
     "executing": False,
     "abort_command": False,
     "abort_result": False,
@@ -46,19 +50,45 @@ def read_exact(sock: socket.socket, buf: bytearray, size: int) -> bytes:
 
 
 def observe(subject: str, payload: dict) -> None:
-    if subject == "swarm.plan.ready":
-        EXPECTED["plan_ready"] = True
+    if subject == "furia.s1.mission-delegation":
+        EXPECTED["delegated"] = (
+            payload.get("schema") == "furia.s1.mission-delegation"
+            and payload.get("version") == "1.0.0"
+            and payload.get("mission_id") == MISSION_ID
+            and payload.get("authority", {}).get("mode") == "intercept"
+            and bool(str(payload.get("authority", {}).get("authorization_id", "")).strip())
+            and payload.get("graph", {}).get("tasks", [{}])[0].get("is_lethal") is False
+        )
+    elif subject == "furia.s1.execution-progress":
+        if payload.get("mission_id") != MISSION_ID or payload.get("version") != "1.0.0":
+            return
+        phase = payload.get("phase")
+        if phase == "accepted":
+            EXPECTED["s1_accepted"] = True
+        elif phase == "active":
+            EXPECTED["s1_active"] = True
+    elif subject == "furia.s1.execution-evidence":
+        EXPECTED["execution_evidence"] = (
+            payload.get("state") == "active"
+            and payload.get("plan_revision") == 1
+            and payload.get("rejection_reason") is None
+        )
     elif subject == "swarm.command.abort":
         EXPECTED["abort_command"] = (
             payload.get("version") == "1.0.0"
             and payload.get("action") == "abort"
-            and payload.get("mission_id") == "perimeter_defense_fob"
+            and payload.get("mission_id") == MISSION_ID
             and payload.get("policy_id") == "BOD-RWY-FRATRICIDE-003"
             and payload.get("source") == "core-safety-policy"
         )
     elif subject == "swarm.command.result.abort":
-        EXPECTED["abort_result"] = payload.get("status") == "executed"
+        EXPECTED["abort_result"] = (
+            payload.get("mission_id") == MISSION_ID
+            and payload.get("status") == "executed"
+        )
     elif subject == "swarm.fsm.state":
+        if payload.get("mission_id") != MISSION_ID:
+            return
         state = payload.get("state")
         if state == "ExecutingOpord":
             EXPECTED["executing"] = True
@@ -78,10 +108,12 @@ def main() -> None:
         read_line(sock, buf)  # INFO
         sock.sendall(
             b'CONNECT {"verbose":false,"pedantic":false,"lang":"python-stdlib","version":"1"}\r\n'
-            b"SUB swarm.plan.ready 1\r\n"
-            b"SUB swarm.fsm.state 2\r\n"
-            b"SUB swarm.command.abort 3\r\n"
-            b"SUB swarm.command.result.abort 4\r\n"
+            b"SUB furia.s1.mission-delegation 1\r\n"
+            b"SUB furia.s1.execution-progress 2\r\n"
+            b"SUB furia.s1.execution-evidence 3\r\n"
+            b"SUB swarm.fsm.state 4\r\n"
+            b"SUB swarm.command.abort 5\r\n"
+            b"SUB swarm.command.result.abort 6\r\n"
             b"PING\r\n"
         )
 
