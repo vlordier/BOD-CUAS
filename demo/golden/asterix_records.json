@@ -1,0 +1,8 @@
+[
+  {"name":"incs-pair-configuration","category":16,"record":[244,1,2,7,2,0,0,128,1,16,2,32,2,48,2],"altitude_msl_mm":null,"ground_elevation_msl_mm":null},
+  {"name":"authorized-inspection-uas","category":129,"record":[191,211,128,1,2,68,74,73,77,51,48,1,2,3,4,5,6,7,8,9,10,11,12,70,82,0,0,128,15,240,95,26,255,190,221,80,0,0,10,0,5,0,6,64,0,200,0,0,100],"altitude_msl_mm":null,"ground_elevation_msl_mm":null},
+  {"name":"unknown-cooperative-uas","category":129,"record":[191,211,128,1,2,68,74,73,77,51,48,170,170,170,170,170,170,170,170,170,170,170,170,70,82,0,0,128,15,240,95,26,255,190,221,80,0,0,10,0,5,0,6,64,0,200,0,0,100],"altitude_msl_mm":null,"ground_elevation_msl_mm":null},
+  {"name":"expired-known-uas","category":129,"record":[191,211,128,1,2,69,88,80,79,76,68,238,238,238,238,238,238,238,238,238,238,238,238,70,82,0,0,128,15,240,95,26,255,190,221,80,0,0,10,0,5,0,6,64,0,200,0,0,100],"altitude_msl_mm":null,"ground_elevation_msl_mm":null},
+  {"name":"non-cooperative-runway-track","category":15,"record":[231,12,1,2,1,0,7,0,0,128,18,52,16,2,0,1,35,128,31,224,190,51,255,125,186,159],"altitude_msl_mm":50000,"ground_elevation_msl_mm":null},
+  {"name":"degraded-sensor-status","category":63,"record":[184,1,2,0,0,128,3,4,64],"altitude_msl_mm":null,"ground_elevation_msl_mm":null}
+]
