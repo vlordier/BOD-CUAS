@@ -27,6 +27,8 @@ EXPECTED = {
     "delegation_accepted": False,
     "execution_evidence": False,
     "executing": False,
+    "lost_link_continuation": False,
+    "recovered_after_lost_link": False,
     "abort_command": False,
     "final_abort_evidence": False,
     "abort_result": False,
@@ -208,6 +210,22 @@ def observe(subject: str, payload: dict) -> None:
             "execution_evidence",
             common_valid and payload.get("state") in {"accepted", "active"},
         )
+        lost_link = (
+            common_valid
+            and payload.get("state") == "active"
+            and payload.get("degraded_mode") == "lost_link_continuation"
+            and payload.get("contract_remaining_ms", 0) > 0
+            and payload.get("rejection_reason") is None
+        )
+        mark("lost_link_continuation", lost_link)
+        recovered = (
+            common_valid
+            and EXPECTED["lost_link_continuation"]
+            and payload.get("state") == "active"
+            and payload.get("degraded_mode") == "normal"
+            and payload.get("rejection_reason") is None
+        )
+        mark("recovered_after_lost_link", recovered)
         mark(
             "final_abort_evidence",
             common_valid
@@ -252,7 +270,9 @@ def assert_causal_order() -> None:
         ("delegation_emitted", "delegation_accepted"),
         ("delegation_emitted", "execution_evidence"),
         ("delegation_accepted", "executing"),
-        ("execution_evidence", "abort_command"),
+        ("execution_evidence", "lost_link_continuation"),
+        ("lost_link_continuation", "recovered_after_lost_link"),
+        ("recovered_after_lost_link", "abort_command"),
         ("executing", "abort_command"),
         ("abort_command", "aborted"),
         ("abort_command", "final_abort_evidence"),
