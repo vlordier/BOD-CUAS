@@ -1,0 +1,54 @@
+version: 1
+scenario: bod-cuas-golden
+reference: WGS84
+volumes:
+  - id: runway-05-23-core
+    kind: runway_protection
+    runway_or_sector: "05/23"
+    priority: immediate_flight_safety
+    floor_msl_m: 35
+    ceiling_msl_m: 180
+    polygon:
+      - [44.82350, -0.72850]
+      - [44.82350, -0.68150]
+      - [44.83750, -0.68150]
+      - [44.83750, -0.72850]
+  - id: approach-rwy23
+    kind: approach_protection
+    runway_or_sector: "RWY23"
+    priority: high
+    floor_msl_m: 35
+    ceiling_msl_m: 350
+    polygon:
+      - [44.83500, -0.68000]
+      - [44.84600, -0.65000]
+      - [44.86000, -0.65500]
+      - [44.84200, -0.69000]
+  - id: approach-rwy05
+    kind: approach_protection
+    runway_or_sector: "RWY05"
+    priority: high
+    floor_msl_m: 35
+    ceiling_msl_m: 350
+    polygon:
+      - [44.82500, -0.73000]
+      - [44.80700, -0.76500]
+      - [44.79300, -0.75800]
+      - [44.81400, -0.72000]
+  - id: apron-critical
+    kind: critical_infrastructure
+    runway_or_sector: "APRON"
+    priority: high
+    floor_msl_m: 35
+    ceiling_msl_m: 150
+    polygon:
+      - [44.82400, -0.71500]
+      - [44.82400, -0.70000]
+      - [44.83100, -0.70000]
+      - [44.83100, -0.71500]
+projection_horizons_sec: [30, 60, 120]
+policy:
+  degrade_confidence_when_sensor_coverage_degraded: true
+  never_clear_threat_from_sensor_loss_alone: true
+  require_named_authority_for_mitigation: true
+  autonomous_detect_to_defeat: false
