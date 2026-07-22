@@ -45,6 +45,8 @@ else
 fi
 wait_tcp 127.0.0.1 4222 'NATS JetStream'
 export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
+# Core loads the deterministic Bordeaux CAT129 authorization policy from here.
+export UXV_CONFIG_DIR="${UXV_CONFIG_DIR:-$SCRIPT_DIR/../../config}"
 
 echo '=== Bordeaux golden demo: build Core services ==='
 (
@@ -54,7 +56,7 @@ echo '=== Bordeaux golden demo: build Core services ==='
 echo '=== Start Core C-UAS services ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & PIDS+=("$!")
 NATS_URL="$NATS_URL" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.log" 2>&1 & PIDS+=("$!")
-NATS_URL="$NATS_URL" "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas.log" 2>&1 & PIDS+=("$!")
+NATS_URL="$NATS_URL" UXV_CONFIG_DIR="$UXV_CONFIG_DIR" "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas.log" 2>&1 & PIDS+=("$!")
 wait_http http://127.0.0.1:8080/health 'ATAK dev server'
 wait_http http://127.0.0.1:3000/health 'Furia Core'
 wait_http http://127.0.0.1:3475/health 'C-UAS director'
@@ -69,6 +71,11 @@ echo '=== Start Furia C2 ==='
   NATS_URL="$NATS_URL" exec pnpm dev --host 127.0.0.1
 ) >"$LOG_DIR/c2.log" 2>&1 & PIDS+=("$!")
 wait_http http://127.0.0.1:5173 'Furia C2' 90
+
+echo '=== Replay deterministic ASTERIX surveillance ==='
+python3 "$SCRIPT_DIR/replay_asterix.py" >"$LOG_DIR/asterix-replay.log" 2>&1
+printf '%-28s ✅\n' 'ASTERIX replay'
+
 cat <<EOF
 
 FURIA BORDEAUX GOLDEN DEMO READY
@@ -78,6 +85,8 @@ Core:       http://127.0.0.1:3000
 C2:         http://127.0.0.1:5173
 C-UAS:      http://127.0.0.1:3475
 SAPIENT:    publishing to JetStream stream FURIA_CUAS
+ASTERIX:    CAT016 + CAT129 (authorized/unknown/unauthorized) + CAT015 + CAT063 replayed
+Auth config: $UXV_CONFIG_DIR/cuas-authorizations.yaml
 Timeline:   $SCRIPT_DIR/timeline.yaml
 Logs:       $LOG_DIR
 
