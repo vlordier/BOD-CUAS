@@ -68,6 +68,14 @@ def origin_evidence_events() -> list[tuple[float, str, dict]]:
     return [(at, "surveillance.origin.bearing", payload) for at, payload in bearings] + tdoa_fixes
 
 
+def execution_health_events() -> list[tuple[float, str, dict]]:
+    """Simulation facts only. S1 derives Core-facing evidence through the real delegation guard."""
+    return [
+        (55.0, "s1.sim.execution-health", {"mission_id": MISSION_ID, "comms_available": False, "navigation_safe": True, "authority_valid": True}),
+        (65.0, "s1.sim.execution-health", {"mission_id": MISSION_ID, "comms_available": True, "navigation_safe": True, "authority_valid": True}),
+    ]
+
+
 def stamp_cat015_time_of_day(record: list[int], now_ms: int) -> None:
     raw = ((now_ms % 86_400_000) * 128 // 1000) & 0xFFFFFF
     record[6:9] = [(raw >> 16) & 0xFF, (raw >> 8) & 0xFF, raw & 0xFF]
@@ -82,6 +90,7 @@ EVENTS = [
     *rogue_kinematic_events(),
     degraded_sensor_event(),
     (35.0, "operator.action.authorized", {"action": "intercept", "track_id": ROGUE_TRACK_ID, "operator": "demo-operator", "authorization_id": "bod-demo-auth-4660", "authorized": True}),
+    *execution_health_events(),
     (80.0, "safety.civilian_aircraft_conflict", {"mission_id": MISSION_ID, "flight_id": "AFR762", "track_id": ROGUE_TRACK_ID, "policy": "BOD-RWY-FRATRICIDE-003"}),
     (95.0, "scenario.status", {"id": "bod-cuas-golden", "state": "complete", "tick": 95, "elapsed_sec": 95}),
 ]
@@ -116,6 +125,9 @@ def main() -> None:
                     stamp_cat015_time_of_day(payload["record"], now_ms)
             elif subject.startswith("surveillance.origin."):
                 payload["observed_at_ms"] = now_ms
+            elif subject == "s1.sim.execution-health":
+                payload["observed_at_ms"] = now_ms
+                payload["track_observed_at_ms"] = now_ms
             publish(sock, subject, payload)
             sock.sendall(b"PING\r\n")
             _ = sock.recv(4096)
