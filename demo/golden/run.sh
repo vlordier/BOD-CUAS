@@ -4,6 +4,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${FURIA_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 CORE="$ROOT/furia-core"
 C2="$ROOT/furia-c2"
+S1="$ROOT/S1"
 LOG_DIR="${TMPDIR:-/tmp}/furia-bod-golden"
 mkdir -p "$LOG_DIR"
 PIDS=()
@@ -46,11 +47,16 @@ fi
 wait_tcp 127.0.0.1 4222 'NATS JetStream'
 export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
 
-echo '=== Bordeaux golden demo: build Core services ==='
+echo '=== Build Core + S1 demo services ==='
 (
   cd "$CORE"
   cargo build --release -p furia-core-server -p dev-atak-server -p counter-uas-director -p sapient-simulator
 )
+(
+  cd "$S1"
+  cargo build --release -p s1-sim-server
+)
+
 echo '=== Start Core C-UAS services ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & PIDS+=("$!")
 NATS_URL="$NATS_URL" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.log" 2>&1 & PIDS+=("$!")
@@ -58,6 +64,13 @@ NATS_URL="$NATS_URL" "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas
 wait_http http://127.0.0.1:8080/health 'ATAK dev server'
 wait_http http://127.0.0.1:3000/health 'Furia Core'
 wait_http http://127.0.0.1:3475/health 'C-UAS director'
+
+echo '=== Start S1 simulation service on JetStream ==='
+(
+  cd "$S1"
+  exec ./target/release/s1-sim-server --nats-url "$NATS_URL" --port 3227
+) >"$LOG_DIR/s1.log" 2>&1 & PIDS+=("$!")
+wait_http http://127.0.0.1:3227/api/v1/scenarios 'S1 Sim Server' 90
 
 echo '=== Start SAPIENT simulator on JetStream ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/sapient-simulator" --target-lat 44.8283 --target-lon -0.7156 >"$LOG_DIR/sapient.log" 2>&1 & PIDS+=("$!")
@@ -69,6 +82,10 @@ echo '=== Start Furia C2 ==='
   NATS_URL="$NATS_URL" exec pnpm dev --host 127.0.0.1
 ) >"$LOG_DIR/c2.log" 2>&1 & PIDS+=("$!")
 wait_http http://127.0.0.1:5173 'Furia C2' 90
+
+echo '=== Start deterministic operational replay ==='
+NATS_URL="$NATS_URL" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 & PIDS+=("$!")
+
 cat <<EOF
 
 FURIA BORDEAUX GOLDEN DEMO READY
@@ -77,13 +94,14 @@ JetStream:  $NATS_URL
 Core:       http://127.0.0.1:3000
 C2:         http://127.0.0.1:5173
 C-UAS:      http://127.0.0.1:3475
+S1:         http://127.0.0.1:3227
 SAPIENT:    publishing to JetStream stream FURIA_CUAS
 Timeline:   $SCRIPT_DIR/timeline.yaml
+Replay log: $LOG_DIR/replay.log
 Logs:       $LOG_DIR
 
 Transport policy: NATS JetStream only. No Zenoh transport is used by the golden path.
-Next vertical-slice target: drive operator authorization, S1 plan/execution, and airport safety abort
-from durable JetStream events.
+The replay submits a real S1 swarm intent; S1 owns plan/FSM event emission consumed by C2.
 Press Ctrl-C to stop all demo processes.
 EOF
 wait
