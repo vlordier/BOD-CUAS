@@ -1,0 +1,43 @@
+# Bordeaux C-UAS threat origin scenario data
+# RF sensor positions and acoustic sensor positions for threat localization
+
+version: "1.0"
+scenario: bod-cuas-golden
+
+rf_sensors:
+  - id: rf-sensor-01
+    latitude_e7: 448_300_000
+    longitude_e7: -7_200_000
+    altitude_msl_mm: 50_000
+    frequency_bands_mhz: [2400, 5800]
+    bearing_accuracy_cdeg: 500
+
+  - id: rf-sensor-02
+    latitude_e7: 448_400_000
+    longitude_e7: -7_000_000
+    altitude_msl_mm: 50_000
+    frequency_bands_mhz: [2400, 5800]
+    bearing_accuracy_cdeg: 500
+
+  - id: rf-sensor-03
+    latitude_e7: 448_200_000
+    longitude_e7: -6_800_000
+    altitude_msl_mm: 50_000
+    frequency_bands_mhz: [2400, 5800]
+    bearing_accuracy_cdeg: 500
+
+acoustic_sensors:
+  - id: acoustic-array-01
+    latitude_e7: 448_350_000
+    longitude_e7: -7_100_000
+    altitude_msl_mm: 10_000
+    bearing_accuracy_cdeg: 1500
+
+threat_origin:
+  track_id: "4660"
+  estimated_launch_zone:
+    latitude_e7: 448_500_000
+    longitude_e7: -7_000_000
+    uncertainty_mm: 200_000
+  confidence_permille: 750
+  method: "tdoa_bearing_fusion"

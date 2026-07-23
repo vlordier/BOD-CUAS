@@ -1,0 +1,108 @@
+name: Golden Demo Contract
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+env:
+  FURIA_ROOT: ${{ github.workspace }}
+  GOLDEN_EXIT_AFTER_ACCEPTANCE: "1"
+
+jobs:
+  golden-demo:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout BOD-CUAS
+        uses: actions/checkout@v4
+        with:
+          path: BOD-CUAS
+
+      - name: Checkout furia-core
+        uses: actions/checkout@v4
+        with:
+          repository: furia-io/furia-core
+          path: furia-core
+
+      - name: Checkout furia-ui
+        uses: actions/checkout@v4
+        with:
+          repository: furia-io/furia-ui
+          path: furia-ui
+
+      - name: Checkout furia-c2
+        uses: actions/checkout@v4
+        with:
+          repository: furia-io/furia-c2
+          path: furia-c2
+
+      - name: Checkout S1
+        uses: actions/checkout@v4
+        with:
+          repository: furia-io/S1
+          path: S1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libssl-dev pkg-config
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install NATS CLI
+        run: |
+          curl -sfL https://github.com/nats-io/natscli/releases/download/v0.1.5/nats-0.1.5-linux-amd64.tar.gz | tar xz
+          sudo mv nats-0.1.5-linux-amd64/nats /usr/local/bin/nats
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Build furia-core binaries
+        run: |
+          cd furia-core
+          cargo build --release -p furia-core-server -p dev-atak-server -p counter-uas-director -p sapient-simulator
+
+      - name: Build S1 binaries
+        run: |
+          cd S1
+          cargo build --release -p s1-sim-server --bins
+
+      - name: Install C2 dependencies
+        run: |
+          cd furia-c2
+          pnpm install
+
+      - name: Run golden demo
+        run: |
+          cd BOD-CUAS
+          bash demo/golden/doctor.sh
+          GOLDEN_EXIT_AFTER_ACCEPTANCE=1 bash demo/golden/run.sh
+
+      - name: Generate acceptance report
+        if: always()
+        run: |
+          cd BOD-CUAS
+          python3 demo/golden/acceptance_report.py
+
+      - name: Bundle logs
+        if: always()
+        run: |
+          cd BOD-CUAS
+          bash demo/golden/bundle_logs.sh
+
+      - name: Upload log bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-demo-logs
+          path: /tmp/furia-bod-golden-bundles/*.tar.gz

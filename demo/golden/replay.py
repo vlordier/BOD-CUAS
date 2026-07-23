@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Deterministic Bordeaux golden-demo event driver using only the NATS wire protocol."""
+"""Deterministic Bordeaux golden-demo event driver using only the NATS wire protocol.
+
+This replay injects STIMULI only — never authoritative outputs.
+Core owns all authority, delegation, evidence, and safety commands.
+"""
 from __future__ import annotations
 
 import json
@@ -11,91 +15,13 @@ from urllib.parse import urlparse
 
 NATS_URL = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
 SPEED = float(os.environ.get("DEMO_SPEED", "1.0"))
-ASTERIX_SUBJECT = "surveillance.asterix.record"
 
-
-def load_asterix_events() -> list[tuple[float, str, dict]]:
-    fixtures = json.loads(Path(__file__).with_name("asterix_records.json").read_text(encoding="utf-8"))
-    events: list[tuple[float, str, dict]] = []
-    for index, fixture in enumerate(fixtures):
-        events.append(
-            (
-                1.0 + index * 0.25,
-                ASTERIX_SUBJECT,
-                {
-                    "category": fixture["category"],
-                    "record": fixture["record"],
-                    "received_at_ms": 0,
-                    "altitude_msl_mm": fixture.get("altitude_msl_mm"),
-                    "ground_elevation_msl_mm": fixture.get("ground_elevation_msl_mm"),
-                    "_fixture_name": fixture["name"],
-                },
-            )
-        )
-    return events
-
-
-EVENTS = [
-    (0.0, "scenario.status", {"id": "bod-cuas-golden", "state": "running", "tick": 0, "elapsed_sec": 0}),
-    *load_asterix_events(),
-    (5.0, "operator.timeline", {"event": "authorized_uas_detected", "track_id": "uas-authorized-01", "authorization": "authorized", "severity": "info"}),
-    (10.0, "operator.timeline", {"event": "unknown_cooperative_uas", "track_id": "uas-unknown-01", "authorization": "unknown", "severity": "attention"}),
-    (18.0, "operator.timeline", {"event": "known_uas_unauthorized", "track_id": "uas-expired-01", "authorization": "unauthorized", "severity": "high"}),
-    (20.0, "operator.timeline", {"event": "rogue_uas_detected", "track_id": "uas-rogue-042", "severity": "high", "sensors": ["radar-low-altitude", "eo-ir"]}),
-    (30.0, "cuas.risk.protected_volume", {
-        "track_id": "uas-rogue-042", "assessed_at_ms": 30_000, "threat_state": "credible_threat",
-        "confidence_permille": 900, "authorization_known": False, "authorized": None,
-        "sensor_coverage_degraded": False, "affected_runways_or_sectors": ["RWY23"],
-        "intersections": [{"volume_id": "approach-rwy23", "runway_or_sector": "RWY23", "horizon_sec": 60,
-            "predicted_entry_in_ms": 37_000, "predicted_exit_in_ms": 52_000,
-            "minimum_horizontal_margin_mm": -1_000, "minimum_vertical_margin_mm": 2_000}],
-        "recommendation": "protect_volume", "rationale_codes": ["non_cooperative", "protected_volume_intersection"],
-    }),
-    (32.0, "operator.timeline", {"event": "sensor_degraded", "sensor": "radar-low-altitude", "connection_status": "degraded", "coverage_degraded": True}),
-    (33.0, "cuas.risk.protected_volume", {
-        "track_id": "uas-rogue-042", "assessed_at_ms": 33_000, "threat_state": "credible_threat",
-        "confidence_permille": 700, "authorization_known": False, "authorized": None,
-        "sensor_coverage_degraded": True, "affected_runways_or_sectors": ["RWY23"],
-        "intersections": [{"volume_id": "approach-rwy23", "runway_or_sector": "RWY23", "horizon_sec": 60,
-            "predicted_entry_in_ms": 34_000, "predicted_exit_in_ms": 49_000,
-            "minimum_horizontal_margin_mm": -1_000, "minimum_vertical_margin_mm": 2_000}],
-        "recommendation": "protect_volume", "rationale_codes": ["protected_volume_intersection", "sensor_coverage_degraded"],
-    }),
-    (35.0, "furia.s1.mission-delegation", {
-        "schema": "furia.s1.mission-delegation",
-        "version": "1.0.0",
-        "mission_id": "cuas_bod_airport",
-        "plan_id": "bod-cuas-shadow-plan",
-        "plan_revision": 1,
-        "correlation_id": "bod-cuas-001",
-        "dispatched_at_ms": 35_000,
-        "valid_until_ms": 75_000,
-        "authority": {"mode": "intercept", "authorization_id": "exercise-authority"},
-        "lost_link_policy": "continue_then_rtl",
-        "cuas_constraints": None,
-        "graph": {"tasks": [{"id": "shadow-rogue-042", "effect": "track_and_shadow", "target": "uas-rogue-042"}]},
-    }),
-    (40.0, "cuas.incident.state", {
-        "incident_id": "bod-cuas-001", "updated_at_ms": 40_000, "primary_track_id": "uas-rogue-042",
-        "threat_state": "credible_threat", "affected_runways_or_sectors": ["RWY23"],
-        "recommendation": "restrict_affected_runway_or_sector", "operator_acknowledgement_required": True,
-        "mitigation_authorized": False, "decision_authority": None, "audit_reason": "protected-volume risk confirmed",
-    }),
-    (45.0, "operator.action.authorized", {"action": "bounded_intercept_shadow", "track_id": "uas-rogue-042", "operator": "demo-operator", "decision_authority": "exercise-authority", "authorized": True}),
-    (62.0, "operator.timeline", {"event": "second_rogue_uas_detected", "track_id": "uas-rogue-043", "severity": "high"}),
-    (70.0, "s1.execution.degraded", {"mode": "degraded_communications", "continuation": "bounded_by_contract_expiry", "authority_valid_until_ms": 75_000}),
-    (75.0, "s1.execution.evidence", {"track_id": "uas-rogue-042", "degraded_mode": "communications_lost", "rejection_reason": "authority_expired", "safe_recovery": False}),
-    (80.0, "safety.civilian_aircraft_conflict", {"flight_id": "AFR762", "track_id": "uas-rogue-042", "policy": "BOD-RWY-FRATRICIDE-003"}),
-    (81.0, "operator.action.abort", {"action": "bounded_intercept_shadow", "reason": "civilian_aircraft_conflict", "policy": "BOD-RWY-FRATRICIDE-003"}),
-    (88.0, "s1.execution.evidence", {"track_id": "uas-rogue-042", "degraded_mode": "safety_hold", "rejection_reason": "safety_invariant_unavailable", "safe_recovery": True}),
-    (95.0, "cuas.incident.state", {
-        "incident_id": "bod-cuas-001", "updated_at_ms": 95_000, "primary_track_id": "uas-rogue-042",
-        "threat_state": "resolved", "affected_runways_or_sectors": [], "recommendation": "none",
-        "operator_acknowledgement_required": False, "mitigation_authorized": False, "decision_authority": None,
-        "audit_reason": "safe-recovery-confirmed",
-    }),
-    (100.0, "scenario.status", {"id": "bod-cuas-golden", "state": "complete", "tick": 100, "elapsed_sec": 100}),
-]
+# Subjects
+OBSERVATION_SUBJECT = "surveillance.observation"
+SCENARIO_STATUS_SUBJECT = "scenario.status"
+OPERATOR_AUTHORIZED_SUBJECT = "operator.action.authorized"
+S1_EXECUTION_HEALTH_SUBJECT = "s1.sim.execution-health"
+SAFETY_CIVILIAN_CONFLICT_SUBJECT = "safety.civilian_aircraft_conflict"
 
 
 def publish(sock: socket.socket, subject: str, payload: dict) -> None:
@@ -103,32 +29,228 @@ def publish(sock: socket.socket, subject: str, payload: dict) -> None:
     sock.sendall(f"PUB {subject} {len(data)}\r\n".encode() + data + b"\r\n")
 
 
+def make_observation(
+    track_id: str,
+    kind: str,
+    category: int,
+    lat_e7: int,
+    lon_e7: int,
+    alt_mm: int,
+    vx: int,
+    vy: int,
+    vz: int,
+    cooperative: bool | None,
+    authorized: bool | None,
+    observed_at_ms: int,
+    received_at_ms: int,
+) -> dict:
+    return {
+        "observation": {
+            "kind": kind,
+            "observed_at_ms": observed_at_ms,
+            "position": {
+                "latitude_e7": lat_e7,
+                "longitude_e7": lon_e7,
+                "altitude_msl_mm": alt_mm,
+            },
+            "velocity_ned_mm_s": [vx, vy, vz],
+            "horizontal_uncertainty_mm": 2000,
+            "vertical_uncertainty_mm": 1000,
+            "cooperative": cooperative,
+            "authorized": authorized,
+            "identity": None,
+            "provenance": {
+                "category": category,
+                "edition": "1.0",
+                "profile": None,
+                "sac": 1,
+                "sic": 2,
+                "source_track_id": int(track_id),
+                "pair_id": None,
+                "received_at_ms": received_at_ms,
+                "raw_record_sha256": [0] * 32,
+            },
+        }
+    }
+
+
 def main() -> None:
     parsed = urlparse(NATS_URL)
     host = parsed.hostname or "127.0.0.1"
     port = parsed.port or 4222
+
     with socket.create_connection((host, port), timeout=10) as sock:
         sock.settimeout(10)
-        _ = sock.recv(4096)
+        _ = sock.recv(4096)  # NATS INFO
         sock.sendall(b'CONNECT {"verbose":false,"pedantic":false,"lang":"python-stdlib","version":"1"}\r\nPING\r\n')
-        _ = sock.recv(4096)
+        _ = sock.recv(4096)  # PONG
+
         start = time.monotonic()
-        for at_s, subject, source_payload in EVENTS:
+
+        def emit(at_s: float, subject: str, payload: dict) -> None:
             deadline = start + at_s / SPEED
             delay = deadline - time.monotonic()
             if delay > 0:
                 time.sleep(delay)
-
-            payload = dict(source_payload)
-            fixture_name = payload.pop("_fixture_name", None)
-            if subject == ASTERIX_SUBJECT:
-                payload["received_at_ms"] = int(time.time() * 1000)
-
             publish(sock, subject, payload)
             sock.sendall(b"PING\r\n")
             _ = sock.recv(4096)
-            label = f" ({fixture_name})" if fixture_name else ""
-            print(f"[{at_s:05.2f}s] {subject}{label}: {payload}", flush=True)
+            print(f"[{at_s:05.2f}s] {subject}", flush=True)
+
+        def emit_obs(at_s: float, subject: str, **obs_kw) -> None:
+            """Emit an observation with a fresh timestamp captured at publication time."""
+            deadline = start + at_s / SPEED
+            delay = deadline - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            now_ms = int(time.time() * 1000)
+            obs_kw["observed_at_ms"] = now_ms
+            obs_kw["received_at_ms"] = now_ms
+            payload = make_observation(**obs_kw)
+            publish(sock, subject, {"observation": payload["observation"]})
+            sock.sendall(b"PING\r\n")
+            _ = sock.recv(4096)
+            print(f"[{at_s:05.2f}s] {subject}", flush=True)
+
+        # 0 s: scenario start
+        emit(0.0, SCENARIO_STATUS_SUBJECT, {
+            "id": "bod-cuas-golden", "state": "running", "tick": 0, "elapsed_sec": 0,
+        })
+
+        # 1 s: CAT129 authorized cooperative UAS (track 7001)
+        emit_obs(1.0, OBSERVATION_SUBJECT,
+            track_id="7001", kind="cooperative_uas", category=129,
+            lat_e7=448400000, lon_e7=-7100000, alt_mm=85000,
+            vx=500, vy=0, vz=0, cooperative=True, authorized=True,
+        )
+
+        # 2 s: CAT129 unknown cooperative UAS (track 7002)
+        emit_obs(2.0, OBSERVATION_SUBJECT,
+            track_id="7002", kind="cooperative_uas", category=129,
+            lat_e7=448500000, lon_e7=-7200000, alt_mm=90000,
+            vx=600, vy=0, vz=0, cooperative=True, authorized=None,
+        )
+
+        # 3 s: CAT129 expired/unauthorized UAS (track 7003)
+        emit_obs(3.0, OBSERVATION_SUBJECT,
+            track_id="7003", kind="cooperative_uas", category=129,
+            lat_e7=448300000, lon_e7=-7000000, alt_mm=80000,
+            vx=400, vy=0, vz=0, cooperative=True, authorized=False,
+        )
+
+        # 4 s: CAT015 non-cooperative runway track (track 4660) — no velocity yet
+        emit_obs(4.0, OBSERVATION_SUBJECT,
+            track_id="4660", kind="non_cooperative_target", category=15,
+            lat_e7=448500000, lon_e7=-7000000, alt_mm=50000,
+            vx=0, vy=0, vz=0, cooperative=False, authorized=None,
+        )
+
+        # 5 s: CAT063 sensor degraded
+        emit(5.0, "surveillance.sensor.status", {
+            "observation": make_observation(
+                track_id="0", kind="sensor_status", category=63,
+                lat_e7=0, lon_e7=0, alt_mm=0,
+                vx=0, vy=0, vz=0, cooperative=None, authorized=None,
+                observed_at_ms=int(time.time() * 1000),
+                received_at_ms=int(time.time() * 1000),
+            )["observation"],
+            "sensor_sac": 1,
+            "sensor_sic": 2,
+            "connection_status": "degraded",
+        })
+
+        # 10 s: operator timeline event
+        emit(10.0, "operator.timeline", {
+            "event": "authorized_uas_detected", "track_id": "7001",
+            "authorization": "authorized", "severity": "info",
+        })
+
+        # 15 s: unknown cooperative UAS
+        emit(15.0, "operator.timeline", {
+            "event": "unknown_cooperative_uas", "track_id": "7002",
+            "authorization": "unknown", "severity": "attention",
+        })
+
+        # 20 s: known-but-expired UAS
+        emit(20.0, "operator.timeline", {
+            "event": "known_uas_unauthorized", "track_id": "7003",
+            "authorization": "unauthorized", "severity": "high",
+        })
+
+        # 25 s: RF bearing observations
+        now_ms = int(time.time() * 1000)
+        emit(25.0, "surveillance.origin.bearing", {
+            "track_id": "4660", "sensor_id": "rf-sensor-01",
+            "bearing_cdeg": 31500, "confidence_permille": 800,
+            "frequency_mhz": 2400, "observed_at_ms": now_ms,
+        })
+        emit(25.5, "surveillance.origin.bearing", {
+            "track_id": "4660", "sensor_id": "rf-sensor-02",
+            "bearing_cdeg": 4500, "confidence_permille": 750,
+            "frequency_mhz": 2400, "observed_at_ms": now_ms,
+        })
+        emit(26.0, "surveillance.origin.tdoa_fix", {
+            "track_id": "4660", "sensor_ids": ["rf-sensor-01", "rf-sensor-02", "rf-sensor-03"],
+            "latitude_e7": 448500000, "longitude_e7": -7000000,
+            "uncertainty_mm": 200000, "observed_at_ms": now_ms,
+        })
+
+        # 30 s: acoustic corroboration
+        emit(30.0, "surveillance.origin.bearing", {
+            "track_id": "4660", "sensor_id": "acoustic-array-01",
+            "bearing_cdeg": 32000, "confidence_permille": 600,
+            "frequency_mhz": None, "observed_at_ms": now_ms,
+        })
+
+        # 39.5 s: fresh observation with velocity (within track-age window for delegation at 40s)
+        emit_obs(39.5, OBSERVATION_SUBJECT,
+            track_id="4660", kind="non_cooperative_target", category=15,
+            lat_e7=448500000, lon_e7=-7000000, alt_mm=50000,
+            vx=1200, vy=-300, vz=0, cooperative=False, authorized=None,
+        )
+
+        # 40 s: named operator authorization
+        emit(40.0, OPERATOR_AUTHORIZED_SUBJECT, {
+            "action": "intercept", "track_id": "4660",
+            "operator": "demo-operator",
+            "authorization_id": "bod-demo-auth-4660",
+            "authorized": True,
+        })
+
+        # 50 s: comms loss simulation health injection
+        emit(50.0, S1_EXECUTION_HEALTH_SUBJECT, {
+            "mission_id": "perimeter_defense_fob",
+            "comms_available": False,
+            "navigation_safe": True,
+            "authority_valid": True,
+            "observed_at_ms": int(time.time() * 1000),
+            "track_observed_at_ms": int(time.time() * 1000),
+        })
+
+        # 60 s: comms recovery simulation health injection
+        emit(60.0, S1_EXECUTION_HEALTH_SUBJECT, {
+            "mission_id": "perimeter_defense_fob",
+            "comms_available": True,
+            "navigation_safe": True,
+            "authority_valid": True,
+            "observed_at_ms": int(time.time() * 1000),
+            "track_observed_at_ms": int(time.time() * 1000),
+        })
+
+        # 70 s: civilian aircraft conflict
+        emit(70.0, SAFETY_CIVILIAN_CONFLICT_SUBJECT, {
+            "mission_id": "perimeter_defense_fob",
+            "flight_id": "AFR762",
+            "track_id": "4660",
+            "policy": "BOD-RWY-FRATRICIDE-003",
+        })
+
+        # 90 s: scenario complete
+        emit(90.0, SCENARIO_STATUS_SUBJECT, {
+            "id": "bod-cuas-golden", "state": "complete", "tick": 90, "elapsed_sec": 90,
+        })
+
+        print("\n=== Replay complete ===", flush=True)
 
 
 if __name__ == "__main__":

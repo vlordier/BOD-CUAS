@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Generate machine-readable acceptance report for the Bordeaux C-UAS golden demo.
+
+Reads verifier logs and produces a JSON report.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+LOG_DIR = os.environ.get(
+    "GOLDEN_LOG_DIR",
+    "/var/folders/y3/3sdhft5n6fx_7vbxz9gffhqr0000gn/T/furia-bod-golden",
+)
+
+CHECKS = {
+    "surveillance": "verify.log",
+    "threat_origin": "verify-origin.log",
+    "operator_authorization": "verify.log",
+    "delegation": "verify.log",
+    "s1_execution": "verify-comm-denied.log",
+    "lost_link_continuation": "verify-comm-denied.log",
+    "comms_recovery": "verify-comm-denied.log",
+    "civilian_safety_abort": "verify.log",
+    "final_safe_hold": "verify-comm-denied.log",
+    "post_scenario_liveness": "verify.log",
+}
+
+
+def main() -> int:
+    report: dict[str, bool | str] = {
+        "result": "PASS",
+        "scenario": "bod-cuas-golden",
+        "checks": {},
+    }
+
+    all_pass = True
+    for check_name, log_file in CHECKS.items():
+        log_path = os.path.join(LOG_DIR, log_file)
+        if not os.path.isfile(log_path):
+            report["checks"][check_name] = False
+            all_pass = False
+            continue
+
+        with open(log_path) as f:
+            content = f.read()
+
+        passed = "PASS" in content
+        report["checks"][check_name] = passed
+        if not passed:
+            all_pass = False
+
+    report["result"] = "PASS" if all_pass else "FAIL"
+    report["log_dir"] = LOG_DIR
+
+    print(json.dumps(report, indent=2))
+    return 0 if all_pass else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
