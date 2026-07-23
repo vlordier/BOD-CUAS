@@ -69,18 +69,18 @@ def main() -> int:
                 # JSON payload line — validate content
                 try:
                     payload = json.loads(line)
-                    # Check delegation payload
-                    if payload.get("correlationId") and payload.get("missionId"):
-                        if payload["missionId"] == "perimeter_defense_fob":
+                    # Check delegation payload (snake_case from Rust serde)
+                    if payload.get("correlation_id") and payload.get("mission_id"):
+                        if payload["mission_id"] == "perimeter_defense_fob":
                             delegation_valid = True
-                            print(f"  ✓ Delegation payload: mission={payload['missionId']}, "
-                                  f"correlation={payload['correlationId']}", flush=True)
-                    # Check abort payload
-                    if payload.get("policy") and payload.get("trackId"):
-                        if payload["policy"] == "BOD-RWY-FRATRICIDE-003":
+                            print(f"  ✓ Delegation payload: mission={payload['mission_id']}, "
+                                  f"correlation={payload['correlation_id']}", flush=True)
+                    # Check abort payload (snake_case from Rust serde — field is policy_id, not policy)
+                    if payload.get("policy_id") and payload.get("track_id"):
+                        if payload["policy_id"] == "BOD-RWY-FRATRICIDE-003":
                             abort_valid = True
-                            print(f"  ✓ Abort payload: policy={payload['policy']}, "
-                                  f"track={payload['trackId']}", flush=True)
+                            print(f"  ✓ Abort payload: policy={payload['policy_id']}, "
+                                  f"track={payload['track_id']}", flush=True)
                 except json.JSONDecodeError:
                     pass
     except Exception as e:

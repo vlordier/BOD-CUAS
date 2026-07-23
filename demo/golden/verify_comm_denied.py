@@ -60,23 +60,23 @@ def main() -> int:
             elif line.startswith("{"):
                 try:
                     payload = json.loads(line)
-                    # Check delegation payload
-                    if payload.get("correlationId") and payload.get("missionId"):
-                        if payload["missionId"] == "perimeter_defense_fob":
+                    # Check delegation payload (snake_case from Rust serde)
+                    if payload.get("correlation_id") and payload.get("mission_id"):
+                        if payload["mission_id"] == "perimeter_defense_fob":
                             delegation_valid = True
-                            print(f"  ✓ Delegation payload: mission={payload['missionId']}, "
-                                  f"correlation={payload['correlationId']}", flush=True)
-                    # Check execution evidence payload
-                    if payload.get("contractId") and payload.get("state"):
+                            print(f"  ✓ Delegation payload: mission={payload['mission_id']}, "
+                                  f"correlation={payload['correlation_id']}", flush=True)
+                    # Check execution evidence payload (snake_case from Rust serde)
+                    if payload.get("contract_id") and payload.get("state"):
                         state = payload["state"]
-                        mode = payload.get("degradedMode", "normal")
+                        mode = payload.get("degraded_mode", "normal")
                         if state == "active" and mode == "lost_link_continuation":
                             lost_link_seen = True
-                            print(f"  ✓ LOST LINK CONTINUATION: contract={payload['contractId']}, "
-                                  f"remaining={payload.get('contractRemainingMs', 0)}ms", flush=True)
+                            print(f"  ✓ LOST LINK CONTINUATION: contract={payload['contract_id']}, "
+                                  f"remaining={payload.get('contract_remaining_ms', 0)}ms", flush=True)
                         elif state == "active" and mode == "normal":
                             recovery_seen = True
-                            print(f"  ✓ NORMAL RECOVERY: contract={payload['contractId']}", flush=True)
+                            print(f"  ✓ NORMAL RECOVERY: contract={payload['contract_id']}", flush=True)
                 except json.JSONDecodeError:
                     pass
     except Exception as e:

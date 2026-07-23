@@ -97,6 +97,22 @@ def main() -> None:
             _ = sock.recv(4096)
             print(f"[{at_s:05.2f}s] {subject}", flush=True)
 
+        def emit_with_now(at_s: float, subject: str, payload: dict) -> None:
+            """Publish at the scheduled time, injecting fresh timestamps into the
+            payload so that observed_at_ms / track_observed_at_ms reflect the
+            actual publication time (not the function-call time)."""
+            deadline = start + at_s / SPEED
+            delay = deadline - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            now_ms = int(time.time() * 1000)
+            payload["observed_at_ms"] = now_ms
+            payload["track_observed_at_ms"] = now_ms
+            publish(sock, subject, payload)
+            sock.sendall(b"PING\r\n")
+            _ = sock.recv(4096)
+            print(f"[{at_s:05.2f}s] {subject}", flush=True)
+
         def emit_obs(at_s: float, subject: str, **obs_kw) -> None:
             """Emit an observation with a fresh timestamp captured at publication time."""
             deadline = start + at_s / SPEED
@@ -209,7 +225,8 @@ def main() -> None:
             vx=1200, vy=-300, vz=0, cooperative=False, authorized=None,
         )
 
-        # 40 s: named operator authorization
+        # 40 s: named operator authorization — capture delegation time for health injections
+        delegation_time_ms = int(time.time() * 1000)
         emit(40.0, OPERATOR_AUTHORIZED_SUBJECT, {
             "action": "intercept", "track_id": "4660",
             "operator": "demo-operator",
@@ -218,23 +235,20 @@ def main() -> None:
         })
 
         # 50 s: comms loss simulation health injection
-        emit(50.0, S1_EXECUTION_HEALTH_SUBJECT, {
+        # emit_with_now injects fresh observed_at_ms / track_observed_at_ms at publication time
+        emit_with_now(50.0, S1_EXECUTION_HEALTH_SUBJECT, {
             "mission_id": "perimeter_defense_fob",
             "comms_available": False,
             "navigation_safe": True,
             "authority_valid": True,
-            "observed_at_ms": int(time.time() * 1000),
-            "track_observed_at_ms": int(time.time() * 1000),
         })
 
         # 60 s: comms recovery simulation health injection
-        emit(60.0, S1_EXECUTION_HEALTH_SUBJECT, {
+        emit_with_now(60.0, S1_EXECUTION_HEALTH_SUBJECT, {
             "mission_id": "perimeter_defense_fob",
             "comms_available": True,
             "navigation_safe": True,
             "authority_valid": True,
-            "observed_at_ms": int(time.time() * 1000),
-            "track_observed_at_ms": int(time.time() * 1000),
         })
 
         # 70 s: civilian aircraft conflict

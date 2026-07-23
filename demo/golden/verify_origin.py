@@ -50,11 +50,11 @@ def main() -> int:
             elif line.startswith("{"):
                 try:
                     payload = json.loads(line)
-                    if payload.get("correlationId") and payload.get("missionId"):
-                        if payload["missionId"] == "perimeter_defense_fob":
+                    if payload.get("correlation_id") and payload.get("mission_id"):
+                        if payload["mission_id"] == "perimeter_defense_fob":
                             delegation_valid = True
-                            print(f"  ✓ Delegation payload: mission={payload['missionId']}, "
-                                  f"correlation={payload['correlationId']}", flush=True)
+                            print(f"  ✓ Delegation payload: mission={payload['mission_id']}, "
+                                  f"correlation={payload['correlation_id']}", flush=True)
                 except json.JSONDecodeError:
                     pass
     except Exception as e:
