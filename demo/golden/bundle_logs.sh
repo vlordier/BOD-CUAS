@@ -2,7 +2,7 @@
 set -euo pipefail
 # Bundle golden demo logs and acceptance report into a timestamped archive.
 
-LOG_DIR="${GOLDEN_LOG_DIR:-/var/folders/y3/3sdhft5n6fx_7vbxz9gffhqr0000gn/T/furia-bod-golden}"
+LOG_DIR="${GOLDEN_LOG_DIR:-${TMPDIR:-/tmp}/furia-bod-golden}"
 BUNDLE_DIR="${GOLDEN_BUNDLE_DIR:-/tmp/furia-bod-golden-bundles}"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 BUNDLE_NAME="furia-bod-golden-$TIMESTAMP"

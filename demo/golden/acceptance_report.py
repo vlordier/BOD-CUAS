@@ -8,10 +8,11 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 
 LOG_DIR = os.environ.get(
     "GOLDEN_LOG_DIR",
-    "/var/folders/y3/3sdhft5n6fx_7vbxz9gffhqr0000gn/T/furia-bod-golden",
+    os.path.join(os.environ.get("TMPDIR", tempfile.gettempdir()), "furia-bod-golden"),
 )
 
 # 1:1 mapping — each verifier log maps to exactly one check

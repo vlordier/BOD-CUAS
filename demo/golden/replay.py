@@ -225,8 +225,7 @@ def main() -> None:
             vx=1200, vy=-300, vz=0, cooperative=False, authorized=None,
         )
 
-        # 40 s: named operator authorization — capture delegation time for health injections
-        delegation_time_ms = int(time.time() * 1000)
+        # 40 s: named operator authorization
         emit(40.0, OPERATOR_AUTHORIZED_SUBJECT, {
             "action": "intercept", "track_id": "4660",
             "operator": "demo-operator",

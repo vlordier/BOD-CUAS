@@ -28,11 +28,22 @@ if command -v docker >/dev/null 2>&1; then printf '%-24s ✅ docker\n' 'containe
 # Port availability
 check_port() {
   local port="$1" name="$2"
-  if lsof -i :"$port" 2>/dev/null | grep -q LISTEN; then
-    printf '%-24s ❌ %s (in use)\n' "$name" ":$port"
-    fail=1
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof -i :"$port" 2>/dev/null | grep -q LISTEN; then
+      printf '%-24s ❌ %s (in use)\n' "$name" ":$port"
+      fail=1
+    else
+      printf '%-24s ✅ %s\n' "$name" ":$port"
+    fi
+  elif command -v ss >/dev/null 2>&1; then
+    if ss -tlnp "sport = :$port" 2>/dev/null | grep -q LISTEN; then
+      printf '%-24s ❌ %s (in use)\n' "$name" ":$port"
+      fail=1
+    else
+      printf '%-24s ✅ %s\n' "$name" ":$port"
+    fi
   else
-    printf '%-24s ✅ %s\n' "$name" ":$port"
+    printf '%-24s ⚠️  %s (cannot check — install lsof or ss)\n' "$name" ":$port"
   fi
 }
 printf '\n'
