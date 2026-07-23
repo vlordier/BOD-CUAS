@@ -18,6 +18,8 @@ cleanup() {
   for pid in "${ALL_PIDS[@]:-}"; do kill "$pid" 2>/dev/null || true; done
   for c in "${ALL_CONTAINERS[@]:-}"; do docker rm -f "$c" >/dev/null 2>&1 || true; done
   wait 2>/dev/null || true
+  # Remove NATS JetStream store for deterministic re-run
+  rm -rf /tmp/furia-bod-nats-js 2>/dev/null || true
   exit "$rc"
 }
 trap cleanup EXIT INT TERM

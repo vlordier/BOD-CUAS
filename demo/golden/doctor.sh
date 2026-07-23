@@ -17,6 +17,7 @@ check_dir 'furia-ui' "$ROOT/furia-ui"
 check_dir 'furia-c2' "$ROOT/furia-c2"
 check_dir 'S1' "$ROOT/S1"
 check_cmd 'cargo' cargo
+check_cmd 'nats' nats
 check_cmd 'node' node
 check_cmd 'pnpm' pnpm
 check_cmd 'python3' python3
