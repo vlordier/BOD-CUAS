@@ -22,7 +22,7 @@ SUBJECTS = [
 
 
 def main() -> int:
-    sub_cmd = ["nats", "sub", "-s", NATS_URL, "--count", "4"] + SUBJECTS
+    # Use timeout as outer safety net, --count as inner limiter\n    sub_cmd = ["timeout", str(int(TIMEOUT_SEC)), "nats", "sub", "-s", NATS_URL, "--count", "8"] + SUBJECTS
 
     print(f"verify.py: monitoring {len(SUBJECTS)} subjects on {NATS_URL}", flush=True)
 

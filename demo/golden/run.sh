@@ -42,6 +42,15 @@ wait_tcp() {
   printf '%-28s ✅\n' "$label"
 }
 
+wait_log() {
+  local log="$1" pattern="$2" label="$3" max="${4:-30}" i=0
+  until grep -q "$pattern" "$log" 2>/dev/null; do
+    (( i++ >= max )) && { echo "ERROR: $label not ready (no '$pattern' in $log)"; return 1; }
+    sleep 1
+  done
+  printf '%-28s ✅\n' "$label"
+}
+
 AUTO_EXIT="${GOLDEN_EXIT_AFTER_ACCEPTANCE:-0}"
 
 if [[ "${1:-}" == "--doctor" ]]; then exec bash "$SCRIPT_DIR/doctor.sh"; fi
@@ -85,8 +94,7 @@ NATS_URL="$NATS_URL" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.lo
 NATS_URL="$NATS_URL" UXV_CONFIG_DIR="$UXV_CONFIG_DIR" RUST_LOG=debug "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas.log" 2>&1 & ALL_PIDS+=("$!")
 wait_http http://127.0.0.1:8080/health 'ATAK dev server'
 wait_http http://127.0.0.1:3000/health 'Furia Core'
-sleep 2
-echo 'C-UAS director (NATS-only)    ✅'
+wait_log "$LOG_DIR/cuas.log" 'C-UAS Director started' 'C-UAS director (NATS-only)' 15
 
 echo '=== Start S1 simulation service ==='
 (
@@ -149,8 +157,6 @@ for pid in $VERIFIER_PIDS; do
   wait "$pid" 2>/dev/null || true
 done
 echo '  Verifiers done'
-
-sleep 3
 
 echo
 echo '=== Verifier results ==='

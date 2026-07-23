@@ -87,46 +87,44 @@ def main() -> None:
 
         start = time.monotonic()
 
-        def emit(at_s: float, subject: str, payload: dict) -> None:
+        def _publish(subject: str, payload: dict | None) -> None:
+            if payload is not None:
+                publish(sock, subject, payload)
+            sock.sendall(b"PING\r\n")
+            _ = sock.recv(4096)
+
+        def emit(at_s: float, subject: str, payload: dict | None = None,
+                 *, inject: Callable[[dict], None] | None = None) -> None:
+            """Publish at the scheduled time. If `inject` is provided, it is
+            called after the sleep with the payload dict, allowing the caller
+            to inject fresh timestamps at publication time."""
             deadline = start + at_s / SPEED
             delay = deadline - time.monotonic()
             if delay > 0:
                 time.sleep(delay)
-            publish(sock, subject, payload)
-            sock.sendall(b"PING\r\n")
-            _ = sock.recv(4096)
+            if inject and payload is not None:
+                inject(payload)
+            _publish(subject, payload)
             print(f"[{at_s:05.2f}s] {subject}", flush=True)
 
         def emit_with_now(at_s: float, subject: str, payload: dict) -> None:
-            """Publish at the scheduled time, injecting fresh timestamps into the
-            payload so that observed_at_ms / track_observed_at_ms reflect the
-            actual publication time (not the function-call time)."""
-            deadline = start + at_s / SPEED
-            delay = deadline - time.monotonic()
-            if delay > 0:
-                time.sleep(delay)
-            now_ms = int(time.time() * 1000)
-            payload["observed_at_ms"] = now_ms
-            payload["track_observed_at_ms"] = now_ms
-            publish(sock, subject, payload)
-            sock.sendall(b"PING\r\n")
-            _ = sock.recv(4096)
-            print(f"[{at_s:05.2f}s] {subject}", flush=True)
+            """Publish at the scheduled time, injecting fresh timestamps into
+            the payload at publication time."""
+            def _inject(p: dict) -> None:
+                now_ms = int(time.time() * 1000)
+                p["observed_at_ms"] = now_ms
+                p["track_observed_at_ms"] = now_ms
+            emit(at_s, subject, payload, inject=_inject)
 
         def emit_obs(at_s: float, subject: str, **obs_kw) -> None:
-            """Emit an observation with a fresh timestamp captured at publication time."""
-            deadline = start + at_s / SPEED
-            delay = deadline - time.monotonic()
-            if delay > 0:
-                time.sleep(delay)
-            now_ms = int(time.time() * 1000)
-            obs_kw["observed_at_ms"] = now_ms
-            obs_kw["received_at_ms"] = now_ms
-            payload = make_observation(**obs_kw)
-            publish(sock, subject, {"observation": payload["observation"]})
-            sock.sendall(b"PING\r\n")
-            _ = sock.recv(4096)
-            print(f"[{at_s:05.2f}s] {subject}", flush=True)
+            """Emit an observation with fresh timestamps captured at publication time."""
+            def _inject(p: dict) -> None:
+                now_ms = int(time.time() * 1000)
+                obs_kw["observed_at_ms"] = now_ms
+                obs_kw["received_at_ms"] = now_ms
+                p.clear()
+                p.update({"observation": make_observation(**obs_kw)["observation"]})
+            emit(at_s, subject, {}, inject=_inject)
 
         # 0 s: scenario start
         emit(0.0, SCENARIO_STATUS_SUBJECT, {
@@ -193,29 +191,28 @@ def main() -> None:
             "authorization": "unauthorized", "severity": "high",
         })
 
-        # 25 s: RF bearing observations
-        now_ms = int(time.time() * 1000)
-        emit(25.0, "surveillance.origin.bearing", {
+        # 25 s: RF bearing observations — use emit_with_now for fresh timestamps
+        emit_with_now(25.0, "surveillance.origin.bearing", {
             "track_id": "4660", "sensor_id": "rf-sensor-01",
             "bearing_cdeg": 31500, "confidence_permille": 800,
-            "frequency_mhz": 2400, "observed_at_ms": now_ms,
+            "frequency_mhz": 2400,
         })
-        emit(25.5, "surveillance.origin.bearing", {
+        emit_with_now(25.5, "surveillance.origin.bearing", {
             "track_id": "4660", "sensor_id": "rf-sensor-02",
             "bearing_cdeg": 4500, "confidence_permille": 750,
-            "frequency_mhz": 2400, "observed_at_ms": now_ms,
+            "frequency_mhz": 2400,
         })
-        emit(26.0, "surveillance.origin.tdoa_fix", {
+        emit_with_now(26.0, "surveillance.origin.tdoa_fix", {
             "track_id": "4660", "sensor_ids": ["rf-sensor-01", "rf-sensor-02", "rf-sensor-03"],
             "latitude_e7": 448500000, "longitude_e7": -7000000,
-            "uncertainty_mm": 200000, "observed_at_ms": now_ms,
+            "uncertainty_mm": 200000,
         })
 
         # 30 s: acoustic corroboration
-        emit(30.0, "surveillance.origin.bearing", {
+        emit_with_now(30.0, "surveillance.origin.bearing", {
             "track_id": "4660", "sensor_id": "acoustic-array-01",
             "bearing_cdeg": 32000, "confidence_permille": 600,
-            "frequency_mhz": None, "observed_at_ms": now_ms,
+            "frequency_mhz": None,
         })
 
         # 39.5 s: fresh observation with velocity (within track-age window for delegation at 40s)

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tempfile
 
@@ -41,7 +42,7 @@ def main() -> int:
         with open(log_path) as f:
             content = f.read()
 
-        passed = "PASS" in content
+        passed = re.search(r"=== \S+\.py: PASS ===", content) is not None
         report["checks"][check_name] = passed
         if not passed:
             all_pass = False

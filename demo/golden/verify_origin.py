@@ -20,7 +20,7 @@ SUBJECTS = [
 
 
 def main() -> int:
-    sub_cmd = ["nats", "sub", "-s", NATS_URL, "--count", "1"] + SUBJECTS
+    sub_cmd = ["timeout", str(int(TIMEOUT_SEC)), "nats", "sub", "-s", NATS_URL, "--count", "1"] + SUBJECTS
 
     print(f"verify_origin.py: monitoring {len(SUBJECTS)} subjects on {NATS_URL}", flush=True)
 

@@ -24,7 +24,7 @@ SUBJECTS = [
 
 
 def main() -> int:
-    sub_cmd = ["nats", "sub", "-s", NATS_URL, "--count", "3"] + SUBJECTS
+    sub_cmd = ["timeout", str(int(TIMEOUT_SEC)), "nats", "sub", "-s", NATS_URL, "--count", "3"] + SUBJECTS
 
     print(f"verify_comm_denied.py: monitoring {len(SUBJECTS)} subjects on {NATS_URL}", flush=True)
 
