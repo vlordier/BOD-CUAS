@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate machine-readable acceptance report for the Bordeaux C-UAS golden demo.
 
-Reads verifier logs and produces a JSON report.
+Reads verifier logs and produces a JSON report with 1:1 check-to-log mapping.
 """
 from __future__ import annotations
 
@@ -14,22 +14,16 @@ LOG_DIR = os.environ.get(
     "/var/folders/y3/3sdhft5n6fx_7vbxz9gffhqr0000gn/T/furia-bod-golden",
 )
 
+# 1:1 mapping — each verifier log maps to exactly one check
 CHECKS = {
-    "surveillance": "verify.log",
-    "threat_origin": "verify-origin.log",
-    "operator_authorization": "verify.log",
-    "delegation": "verify.log",
-    "s1_execution": "verify-comm-denied.log",
+    "causal_ordering": "verify.log",
+    "delegation_observed": "verify-origin.log",
     "lost_link_continuation": "verify-comm-denied.log",
-    "comms_recovery": "verify-comm-denied.log",
-    "civilian_safety_abort": "verify.log",
-    "final_safe_hold": "verify-comm-denied.log",
-    "post_scenario_liveness": "verify.log",
 }
 
 
 def main() -> int:
-    report: dict[str, bool | str] = {
+    report: dict[str, bool | str | dict] = {
         "result": "PASS",
         "scenario": "bod-cuas-golden",
         "checks": {},

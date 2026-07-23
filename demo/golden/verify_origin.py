@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Threat-origin/emitter evidence verifier for Bordeaux C-UAS golden demo.
 
-Subscribes to NATS via nats CLI and verifies Core has valid emitter/origin
-evidence before delegation. No mitigation authorization should be inferred
-merely from origin localization.
+Subscribes to NATS via nats CLI and validates delegation payload fields.
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -33,6 +32,7 @@ def main() -> int:
     )
 
     delegation_seen = False
+    delegation_valid = False
     passed = True
     errors: list[str] = []
     start = time.monotonic()
@@ -47,6 +47,16 @@ def main() -> int:
                     if subj == "furia.s1.mission-delegation":
                         delegation_seen = True
                         print(f"  ✓ MISSION DELEGATION observed", flush=True)
+            elif line.startswith("{"):
+                try:
+                    payload = json.loads(line)
+                    if payload.get("correlationId") and payload.get("missionId"):
+                        if payload["missionId"] == "perimeter_defense_fob":
+                            delegation_valid = True
+                            print(f"  ✓ Delegation payload: mission={payload['missionId']}, "
+                                  f"correlation={payload['correlationId']}", flush=True)
+                except json.JSONDecodeError:
+                    pass
     except Exception as e:
         print(f"verify_origin.py: error: {e}", flush=True)
     finally:
@@ -55,6 +65,9 @@ def main() -> int:
 
     if not delegation_seen:
         errors.append("FAIL: no mission delegation observed")
+        passed = False
+    if not delegation_valid:
+        errors.append("FAIL: delegation payload missing required fields")
         passed = False
 
     print("", flush=True)

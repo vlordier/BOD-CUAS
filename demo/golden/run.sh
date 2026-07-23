@@ -64,7 +64,20 @@ export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
 export FURIA_NATS_URL="$NATS_URL"
 export UXV_CONFIG_DIR="${UXV_CONFIG_DIR:-$SCRIPT_DIR/../../config}"
 
-echo '=== Build services (skipped — binaries already built) ==='
+echo '=== Build services ==='
+if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
+  (
+    cd "$CORE"
+    cargo build --release -p furia-core-server -p dev-atak-server -p counter-uas-director -p sapient-simulator 2>&1 | tail -5
+  )
+  (
+    cd "$S1"
+    cargo build --release -p s1-sim-server --bins 2>&1 | tail -5
+  )
+  echo '  Build complete'
+else
+  echo '  SKIP_BUILD=1 — using existing binaries'
+fi
 
 echo '=== Start Core C-UAS services ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & ALL_PIDS+=("$!")

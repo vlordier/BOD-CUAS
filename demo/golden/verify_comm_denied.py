@@ -8,6 +8,7 @@ Independently proves:
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -35,7 +36,10 @@ def main() -> int:
     )
 
     delegation_seen = False
+    delegation_valid = False
     evidence_seen = False
+    lost_link_seen = False
+    recovery_seen = False
     passed = True
     errors: list[str] = []
     start = time.monotonic()
@@ -53,6 +57,28 @@ def main() -> int:
                     elif subj == "furia.s1.execution-evidence":
                         evidence_seen = True
                         print(f"  ✓ EXECUTION EVIDENCE observed", flush=True)
+            elif line.startswith("{"):
+                try:
+                    payload = json.loads(line)
+                    # Check delegation payload
+                    if payload.get("correlationId") and payload.get("missionId"):
+                        if payload["missionId"] == "perimeter_defense_fob":
+                            delegation_valid = True
+                            print(f"  ✓ Delegation payload: mission={payload['missionId']}, "
+                                  f"correlation={payload['correlationId']}", flush=True)
+                    # Check execution evidence payload
+                    if payload.get("contractId") and payload.get("state"):
+                        state = payload["state"]
+                        mode = payload.get("degradedMode", "normal")
+                        if state == "active" and mode == "lost_link_continuation":
+                            lost_link_seen = True
+                            print(f"  ✓ LOST LINK CONTINUATION: contract={payload['contractId']}, "
+                                  f"remaining={payload.get('contractRemainingMs', 0)}ms", flush=True)
+                        elif state == "active" and mode == "normal":
+                            recovery_seen = True
+                            print(f"  ✓ NORMAL RECOVERY: contract={payload['contractId']}", flush=True)
+                except json.JSONDecodeError:
+                    pass
     except Exception as e:
         print(f"verify_comm_denied.py: error: {e}", flush=True)
     finally:
@@ -62,8 +88,17 @@ def main() -> int:
     if not delegation_seen:
         errors.append("FAIL: no mission delegation observed")
         passed = False
+    if not delegation_valid:
+        errors.append("FAIL: delegation payload missing required fields")
+        passed = False
     if not evidence_seen:
         errors.append("FAIL: no execution evidence observed")
+        passed = False
+    if not lost_link_seen:
+        errors.append("FAIL: no lost_link_continuation evidence observed")
+        passed = False
+    if not recovery_seen:
+        errors.append("FAIL: no normal recovery evidence observed")
         passed = False
 
     print("", flush=True)
