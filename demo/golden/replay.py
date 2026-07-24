@@ -222,42 +222,44 @@ def main() -> None:
             vx=1200, vy=-300, vz=0, cooperative=False, authorized=None,
         )
 
-        # 40 s: named operator authorization
-        emit(40.0, OPERATOR_AUTHORIZED_SUBJECT, {
+        # 44.5 s: named operator authorization (fallback — C2 publishes at ~39.5s when operator clicks)
+        # The C2 shows an operator decision modal at ~39.5s. If the operator clicks
+        # "Authorize" within 5 seconds, the C2 publishes the authorization and this
+        # message is a no-op duplicate. If they don't, this fallback triggers delegation.
+        emit(44.5, OPERATOR_AUTHORIZED_SUBJECT, {
             "action": "intercept", "track_id": "4660",
             "operator": "demo-operator",
             "authorization_id": "bod-demo-auth-4660",
             "authorized": True,
         })
 
-        # 50 s: comms loss simulation health injection
-        # emit_with_now injects fresh observed_at_ms / track_observed_at_ms at publication time
-        emit_with_now(50.0, S1_EXECUTION_HEALTH_SUBJECT, {
+        # 54.5 s: comms loss simulation health injection
+        emit_with_now(54.5, S1_EXECUTION_HEALTH_SUBJECT, {
             "mission_id": "perimeter_defense_fob",
             "comms_available": False,
             "navigation_safe": True,
             "authority_valid": True,
         })
 
-        # 60 s: comms recovery simulation health injection
-        emit_with_now(60.0, S1_EXECUTION_HEALTH_SUBJECT, {
+        # 64.5 s: comms recovery simulation health injection
+        emit_with_now(64.5, S1_EXECUTION_HEALTH_SUBJECT, {
             "mission_id": "perimeter_defense_fob",
             "comms_available": True,
             "navigation_safe": True,
             "authority_valid": True,
         })
 
-        # 70 s: civilian aircraft conflict
-        emit(70.0, SAFETY_CIVILIAN_CONFLICT_SUBJECT, {
+        # 74.5 s: civilian aircraft conflict
+        emit(74.5, SAFETY_CIVILIAN_CONFLICT_SUBJECT, {
             "mission_id": "perimeter_defense_fob",
             "flight_id": "AFR762",
             "track_id": "4660",
             "policy": "BOD-RWY-FRATRICIDE-003",
         })
 
-        # 90 s: scenario complete
-        emit(90.0, SCENARIO_STATUS_SUBJECT, {
-            "id": "bod-cuas-golden", "state": "complete", "tick": 90, "elapsed_sec": 90,
+        # 94.5 s: scenario complete
+        emit(94.5, SCENARIO_STATUS_SUBJECT, {
+            "id": "bod-cuas-golden", "state": "complete", "tick": 94, "elapsed_sec": 94,
         })
 
         print("\n=== Replay complete ===", flush=True)
