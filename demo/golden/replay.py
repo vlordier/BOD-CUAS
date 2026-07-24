@@ -215,8 +215,8 @@ def main() -> None:
             "frequency_mhz": None,
         })
 
-        # 39.5 s: fresh observation with velocity (within track-age window for delegation at 40s)
-        emit_obs(39.5, OBSERVATION_SUBJECT,
+        # 44.0 s: fresh observation with velocity (0.5s before authorization — within track-age window)
+        emit_obs(44.0, OBSERVATION_SUBJECT,
             track_id="4660", kind="non_cooperative_target", category=15,
             lat_e7=448500000, lon_e7=-7000000, alt_mm=50000,
             vx=1200, vy=-300, vz=0, cooperative=False, authorized=None,

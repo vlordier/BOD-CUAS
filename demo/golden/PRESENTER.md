@@ -52,6 +52,8 @@ Actions:
   1. Open terminal at /Users/vincent/Work/BOD-CUAS
   2. Run: make clean && make demo
   3. Wait for "✅ BORDEAUX C-UAS GOLDEN DEMO: PASS"
+  4. Open browser to http://127.0.0.1:4180/?auto=cuas
+     (The C2 auto-launches the C-UAS scenario — no click needed)
 ```
 
 ### Walkthrough (5 min)
@@ -69,19 +71,24 @@ Presenter says (while demo runs):
   [~25s] "RF sensors triangulate the threat origin. Acoustic sensors
            corroborate. Core infers a probable launch zone."
 
-  [~40s] "The operator authorizes interception. Core creates a bounded
-           mission delegation — 300 seconds of authority, non-lethal
-           track-and-shadow only."
+  [~44s] "⚠ OPERATOR DECISION REQUIRED — the C2 shows a modal asking
+           the operator to authorize interception. The operator reviews
+           the threat: track 4660, runway 23 approach, non-lethal track
+           & shadow only. They click AUTHORIZE INTERCEPTION."
 
-  [~50s] "Communications are lost. S1 continues within the existing
+  [~44s] "Core creates a bounded mission delegation — 300 seconds of
+           authority, non-lethal track-and-shadow only."
+
+  [~54s] "Communications are lost. S1 continues within the existing
            bounded delegation — lost-link continuation, not new authority."
 
-  [~60s] "Communications recover. S1 returns to normal execution."
+  [~64s] "Communications recover. S1 returns to normal execution."
 
-  [~70s] "A civilian aircraft conflicts with the response volume.
-           Core issues a safety abort. S1 reaches Aborted/SafeHold."
+  [~74s] "⚠ CIVILIAN CONFLICT — a civilian aircraft (AFR762) conflicts
+           with the response volume. Core issues a safety abort.
+           S1 reaches Aborted/SafeHold."
 
-  [~90s] "Scenario complete. All services remain alive."
+  [~94s] "Scenario complete. All services remain alive."
 ```
 
 ### Verification (1 min)
@@ -101,20 +108,27 @@ Actions:
 
 ```
 Presenter says:
-  "Open http://127.0.0.1:4180 in a browser. The C2 shows:"
+  "Open http://127.0.0.1:4180/?auto=cuas in a browser. The C2 auto-launches
+   the C-UAS scenario. The right sidebar shows the C-UAS status panel."
 
 Actions:
   - Point to the C-UAS info panel (right sidebar):
     • Status bar: ACTIVE/NORMAL → ACTIVE/LOST LINK → ABORTED/SAFE HOLD
+    • COMMS STATUS: green/yellow/red indicator
     • Threat track card: track ID, authority mode, authorization ID
     • Bounded authority countdown bar with seconds remaining
-    • Degraded mode indicator
+    • Degraded mode indicator + rejection reason
+    • ⚠ SAFETY CONFLICT card (appears at ~74s): flight ID, track ID, policy
     • Real-time execution timeline
+    • ✓ SCENARIO COMPLETE summary card (appears at ~94s): metrics
 
   - Point to the map:
     • Bordeaux LFBD operational map with OSM tiles
-    • No-fly zones (runway approach, critical sectors)
-    • Track symbols for cooperative and non-cooperative traffic
+    • Protected volume zones (LFBD PROTECTED VOLUME, CIVIL APPROACH CORRIDOR)
+    • S1 AUTHORITY ENVELOPE zone
+    • Track symbols color-coded by affiliation (hostile/friend/unknown/suspect)
+    • ⚠ CIVILIAN CONFLICT — ABORT banner (appears at ~74s)
+    • BOUNDED AUTHORITY badge (appears after delegation)
 ```
 
 ## Running the Demo
