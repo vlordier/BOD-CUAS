@@ -132,14 +132,14 @@
 
 ### High Impact, Low Effort (can add in <2h each)
 
-| # | Feature | What to build | Files affected |
-|---|---------|---------------|----------------|
-| 1 | Audio alerts | Web Audio API beep tones for key events (delegation, lost link, conflict, abort) | `CuasInfoPanel.tsx` |
-| 2 | Protected volume rendering | Add `MapZone[]` overlay to Console.tsx using existing CUAS_NO_FLY_ZONES | `Console.tsx` |
-| 3 | Safety conflict marker | Add red conflict box on the map when abort command received | `Console.tsx`, `CuasInfoPanel.tsx` |
-| 4 | Post-demo summary card | After scenario.complete, show metrics (detection→delegation time, etc.) | `CuasInfoPanel.tsx` |
-| 5 | Authority envelope on map | Dashed circle showing permitted S1 operating volume | `Console.tsx` |
-| 6 | Comms status indicator | Green/yellow/red indicator in CuasInfoPanel based on evidence degraded_mode | `CuasInfoPanel.tsx` |
+| # | Feature | Status | Files affected |
+|---|---------|--------|---------------|
+| 1 | Audio alerts | ✅ Done | `CuasInfoPanel.tsx` |
+| 2 | Protected volume rendering | ✅ Done | `Console.tsx` |
+| 3 | Safety conflict marker | ✅ Done | `Console.tsx`, `CuasInfoPanel.tsx` |
+| 4 | Post-demo summary card | ✅ Done | `CuasInfoPanel.tsx` |
+| 5 | Authority envelope on map | ✅ Done | `Console.tsx` |
+| 6 | Comms status indicator | ✅ Done | `CuasInfoPanel.tsx` |
 
 ### High Impact, Medium Effort (4-8h each)
 

@@ -100,13 +100,24 @@ All verifiers use `timeout` wrapper + `nats sub --count N` for reliable exit.
 ### C2 CuasInfoPanel (`furia-c2/src/views/CuasInfoPanel.tsx`)
 
 - Raw WebSocket NATS client (no Node.js dependency — works in browser)
-- Subscribes to `furia.s1.mission-delegation`, `furia.s1.execution-evidence`, `swarm.command.abort`
+- Subscribes to `furia.s1.mission-delegation`, `furia.s1.execution-evidence`, `swarm.command.abort`, `scenario.status`
+- **Audio alerts** via Web Audio API: delegation (beep-beep), lost link (warning tone), safety abort (urgent triple-beep)
+- **Comms status indicator**: green/yellow/red bar showing COMMS status
+- **Safety conflict card**: red-bordered box with flight ID, track ID, policy when abort received
+- **Post-demo summary**: green metrics card after scenario.complete (detection→delegation, delegation→abort, lost link duration, total duration)
 - Displays:
   - Status bar (color-coded: green=active, yellow=lost link, red=aborted)
   - Threat track card (ID, mode, authorization, revision)
   - Bounded authority countdown bar (updates every 1s via `setInterval`)
   - Degraded mode indicator + rejection reason
   - Real-time execution timeline
+
+### C2 Console View (`furia-c2/src/views/Console.tsx`)
+
+- **Protected volume zones**: LFBD PROTECTED VOLUME, CIVIL APPROACH CORRIDOR, S1 AUTHORITY ENVELOPE rendered as `MapZone[]` overlays on the map
+- **Safety conflict overlay**: red "⚠ CIVILIAN CONFLICT — ABORT" banner on the map when abort received, plus dynamic conflict zone
+- **C-UAS symbology**: tracks color-coded by affiliation (hostile=4660, friend=7001, unknown=7002, suspect=7003)
+- **Authority delegated indicator**: blue "BOUNDED AUTHORITY: INTERCEPT" badge on the map
 
 ### Service Orchestration (`demo/golden/run.sh`)
 

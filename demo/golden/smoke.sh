@@ -33,7 +33,7 @@ if [[ $DEMO_EXIT -ne 0 ]]; then
     PASSED=false
 fi
 
-for verifier in verify verify_origin verify_comm_denied; do
+for verifier in verify verify-origin verify-comm-denied; do
     log="$LOG_DIR/${verifier}.log"
     if [[ -f "$log" ]]; then
         if grep -q "PASS" "$log"; then
