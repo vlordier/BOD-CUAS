@@ -226,12 +226,18 @@ def main() -> None:
         # The C2 shows an operator decision modal at ~39.5s. If the operator clicks
         # "Authorize" within 5 seconds, the C2 publishes the authorization and this
         # message is a no-op duplicate. If they don't, this fallback triggers delegation.
+        # If the operator clicks "Deny", the C2 publishes authorized:false and the
+        # scenario shows a different outcome (no delegation, no lost link, no abort).
         emit(44.5, OPERATOR_AUTHORIZED_SUBJECT, {
             "action": "intercept", "track_id": "4660",
             "operator": "demo-operator",
             "authorization_id": "bod-demo-auth-4660",
             "authorized": True,
         })
+
+        # Subscribe to operator.action.authorized to detect deny
+        # If operator denied, skip the rest of the scenario
+        # (This is handled by the C2 publishing authorized:false)
 
         # 54.5 s: comms loss simulation health injection
         emit_with_now(54.5, S1_EXECUTION_HEALTH_SUBJECT, {
