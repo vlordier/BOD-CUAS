@@ -47,11 +47,13 @@
 |---------|-----------|----------|---------------------|
 | `surveillance.observation` | Replay | Core | `SurveillanceObservationEventV1` |
 | `operator.action.authorized` | Replay | Core | `{action, track_id, operator, authorization_id, authorized}` |
+| `operator.action.command` | Visible C2 training surface | S1 simulation gateway | `{command, mission_id, track_id, operator, authority_mode}` |
 | `s1.sim.execution-health` | Replay | S1 injector | `{mission_id, comms_available, navigation_safe, authority_valid, observed_at_ms, track_observed_at_ms}` |
 | `safety.civilian_aircraft_conflict` | Replay | Core | `{mission_id, flight_id, track_id, policy}` |
 | `scenario.status` | Replay | Verifiers, C2 | `{id, state, tick, elapsed_sec}` |
 | `furia.s1.mission-delegation` | Core | S1 injector, Verifiers, C2 | `MissionDelegationV1` |
 | `furia.s1.execution-evidence` | S1 injector | Verifiers, C2 | `ExecutionEvidenceV1` |
+| `furia.s1.command-ack` | S1 injector | C2 | `{command, mission_id, track_id, contract_id, state, reason, observed_at_ms}` |
 | `swarm.command.abort` | Core | Verifiers, C2 | `{policy_id, track_id, mission_id, metadata: {flight_id}}` |
 
 ### Ports
@@ -100,7 +102,7 @@ All verifiers use `timeout` wrapper + `nats sub --count N` for reliable exit.
 ### C2 CuasInfoPanel (`furia-c2/src/views/CuasInfoPanel.tsx`)
 
 - Raw WebSocket NATS client (no Node.js dependency — works in browser)
-- Subscribes to `furia.s1.mission-delegation`, `furia.s1.execution-evidence`, `swarm.command.abort`, `scenario.status`
+- Subscribes to `furia.s1.mission-delegation`, `furia.s1.command-ack`, `furia.s1.execution-evidence`, `swarm.command.abort`, `scenario.status`
 - **Audio alerts** via Web Audio API: delegation (beep-beep), lost link (warning tone), safety abort (urgent triple-beep)
 - **Comms status indicator**: green/yellow/red bar showing COMMS status
 - **Safety conflict card**: red-bordered box with flight ID, track ID, policy when abort received
