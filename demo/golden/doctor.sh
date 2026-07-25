@@ -53,6 +53,21 @@ check_port 8080 'ATAK dev server'
 check_port 3000 'Furia Core'
 check_port 3227 'S1 sim server'
 check_port 4180 'Furia C2'
+
+if [[ "${SKIP_BUILD:-0}" == "1" ]]; then
+  printf '\nSKIP_BUILD binary prerequisites\n'
+  check_file() {
+    local name="$1" path="$2"
+    if [[ -x "$path" ]]; then printf '%-24s ✅ %s\n' "$name" "$path"; else printf '%-24s ❌ %s\n' "$name" "$path"; fail=1; fi
+  }
+  check_file 'dev-atak-server' "$ROOT/furia-core/target/release/dev-atak-server"
+  check_file 'furia-core-server' "$ROOT/furia-core/target/release/furia-core-server"
+  check_file 'counter-uas-director' "$ROOT/furia-core/target/release/counter-uas-director"
+  check_file 'sapient-simulator' "$ROOT/furia-core/target/release/sapient-simulator"
+  check_file 's1-sim-server' "$ROOT/S1/target/release/s1-sim-server"
+  check_file 'cuas-health-injector' "$ROOT/S1/target/release/cuas-health-injector"
+  check_file 'furia-c2 vite' "$ROOT/furia-c2/node_modules/.bin/vite"
+fi
 printf '\n'
 if [[ $fail -eq 0 ]]; then echo 'Golden demo prerequisites look ready.'; else echo 'Golden demo prerequisites are incomplete.'; fi
 exit "$fail"

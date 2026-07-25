@@ -1,0 +1,117 @@
+{
+  "schema": "furia.cuas.demo-geodata",
+  "version": "1.0.0",
+  "scenario_id": "bod-cuas-golden",
+  "coordinate_reference_system": "WGS84 (longitude, latitude)",
+  "provenance": {
+    "source": "hand-authored illustrative geometry for the Bordeaux golden-demo replay",
+    "status": "demo_only_not_for_navigation_or_airport_operations",
+    "notes": "This model provides stable visual and scenario context. It is intentionally not an aeronautical chart, AIP extract, obstacle database, sensor survey, or authoritative protected-volume definition. The policy fixture remains protected-volumes.yaml."
+  },
+  "airport": {
+    "icao": "LFBD",
+    "name": "Bordeaux-Merignac",
+    "reference_point": [-0.715556, 44.828333],
+    "display_bounds": [-0.765, 44.793, -0.65, 44.86]
+  },
+  "features": [
+    {
+      "id": "lfbd-aerodrome-context",
+      "kind": "aerodrome_context",
+      "label": "LFBD airfield context",
+      "geometry": {"type": "Polygon", "coordinates": [[[-0.731, 44.817], [-0.689, 44.817], [-0.689, 44.840], [-0.731, 44.840], [-0.731, 44.817]]]}
+    },
+    {
+      "id": "runway-05-23",
+      "kind": "runway",
+      "label": "RWY 05/23",
+      "operational_role": "primary_demo_runway",
+      "geometry": {"type": "LineString", "coordinates": [[-0.729, 44.821], [-0.684, 44.837]]}
+    },
+    {
+      "id": "runway-11-29",
+      "kind": "runway",
+      "label": "RWY 11/29",
+      "operational_role": "secondary_demo_runway",
+      "geometry": {"type": "LineString", "coordinates": [[-0.724, 44.837], [-0.692, 44.819]]}
+    },
+    {
+      "id": "terminal-apron",
+      "kind": "terminal_apron",
+      "label": "Terminal / apron",
+      "geometry": {"type": "Polygon", "coordinates": [[[-0.716, 44.824], [-0.700, 44.824], [-0.700, 44.831], [-0.716, 44.831], [-0.716, 44.824]]]}
+    },
+    {
+      "id": "approach-rwy23-demo",
+      "kind": "approach_corridor",
+      "label": "RWY 23 approach",
+      "runway_or_sector": "RWY23",
+      "geometry": {"type": "Polygon", "coordinates": [[[-0.690, 44.832], [-0.650, 44.855], [-0.655, 44.860], [-0.701, 44.838], [-0.690, 44.832]]]}
+    },
+    {
+      "id": "departure-rwy23-demo",
+      "kind": "departure_corridor",
+      "label": "RWY 23 departure",
+      "runway_or_sector": "RWY23",
+      "geometry": {"type": "Polygon", "coordinates": [[[-0.731, 44.819], [-0.765, 44.793], [-0.758, 44.793], [-0.721, 44.823], [-0.731, 44.819]]]}
+    },
+    {
+      "id": "approach-rwy05-demo",
+      "kind": "approach_corridor",
+      "label": "RWY 05 approach",
+      "runway_or_sector": "RWY05",
+      "geometry": {"type": "Polygon", "coordinates": [[[-0.731, 44.820], [-0.765, 44.793], [-0.758, 44.793], [-0.720, 44.817], [-0.731, 44.820]]]}
+    },
+    {
+      "id": "departure-rwy05-demo",
+      "kind": "departure_corridor",
+      "label": "RWY 05 departure",
+      "runway_or_sector": "RWY05",
+      "geometry": {"type": "Polygon", "coordinates": [[[-0.684, 44.837], [-0.650, 44.855], [-0.655, 44.860], [-0.694, 44.841], [-0.684, 44.837]]]}
+    },
+    {
+      "id": "runway-05-23-core-demo",
+      "kind": "protected_volume",
+      "label": "Runway 05/23 protected volume",
+      "runway_or_sector": "05/23",
+      "policy_fixture_id": "runway-05-23-core",
+      "geometry": {"type": "Polygon", "coordinates": [[[-0.7285, 44.8235], [-0.6815, 44.8235], [-0.6815, 44.8375], [-0.7285, 44.8375], [-0.7285, 44.8235]]]}
+    },
+    {
+      "id": "apron-critical-demo",
+      "kind": "protected_volume",
+      "label": "Apron protected volume",
+      "runway_or_sector": "APRON",
+      "policy_fixture_id": "apron-critical",
+      "geometry": {"type": "Polygon", "coordinates": [[[-0.715, 44.824], [-0.700, 44.824], [-0.700, 44.831], [-0.715, 44.831], [-0.715, 44.824]]]}
+    },
+    {
+      "id": "rf-sensor-01",
+      "kind": "rf_sensor_site",
+      "label": "RF-01",
+      "sensor_fixture_id": "rf-sensor-01",
+      "geometry": {"type": "Point", "coordinates": [-0.720, 44.830]}
+    },
+    {
+      "id": "rf-sensor-02",
+      "kind": "rf_sensor_site",
+      "label": "RF-02",
+      "sensor_fixture_id": "rf-sensor-02",
+      "geometry": {"type": "Point", "coordinates": [-0.700, 44.840]}
+    },
+    {
+      "id": "rf-sensor-03",
+      "kind": "rf_sensor_site",
+      "label": "RF-03",
+      "sensor_fixture_id": "rf-sensor-03",
+      "geometry": {"type": "Point", "coordinates": [-0.680, 44.820]}
+    },
+    {
+      "id": "acoustic-array-01",
+      "kind": "acoustic_sensor_site",
+      "label": "ACOUSTIC-01",
+      "sensor_fixture_id": "acoustic-array-01",
+      "geometry": {"type": "Point", "coordinates": [-0.710, 44.835]}
+    }
+  ]
+}

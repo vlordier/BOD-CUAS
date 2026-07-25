@@ -2,9 +2,9 @@ name: Golden Demo Contract
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, golden-demo-*]
   pull_request:
-    branches: [master, main]
+    branches: [master, main, golden-demo-*]
   workflow_dispatch:
 
 env:
@@ -22,29 +22,37 @@ jobs:
         with:
           path: BOD-CUAS
 
+      - name: Resolve integration manifest
+        id: integration_manifest
+        run: python3 BOD-CUAS/demo/golden/resolve_integration_manifest.py --github-output "$GITHUB_OUTPUT"
+
       - name: Checkout furia-core
         uses: actions/checkout@v4
         with:
           repository: furia-io/furia-core
           path: furia-core
+          ref: ${{ steps.integration_manifest.outputs.furia_core_ref }}
 
       - name: Checkout furia-ui
         uses: actions/checkout@v4
         with:
           repository: furia-io/furia-ui
           path: furia-ui
+          ref: ${{ steps.integration_manifest.outputs.furia_ui_ref }}
 
       - name: Checkout furia-c2
         uses: actions/checkout@v4
         with:
           repository: furia-io/furia-c2
           path: furia-c2
+          ref: ${{ steps.integration_manifest.outputs.furia_c2_ref }}
 
       - name: Checkout S1
         uses: actions/checkout@v4
         with:
           repository: furia-io/S1
           path: S1
+          ref: ${{ steps.integration_manifest.outputs.s1_ref }}
 
       - name: Install system dependencies
         run: |
@@ -66,6 +74,16 @@ jobs:
 
       - name: Install pnpm
         run: npm install -g pnpm
+
+      - name: Validate deterministic demo fixtures and verifier joins
+        run: |
+          cd BOD-CUAS
+          bash -n demo/golden/run.sh demo/golden/doctor.sh demo/golden/smoke.sh
+          python3 -m unittest \
+            demo/golden/test_operational_context.py \
+            demo/golden/test_lfbd_demo_geodata.py \
+            demo/golden/test_abort_correlation.py \
+            demo/golden/test_integration_manifest.py
 
       - name: Build furia-core binaries
         run: |

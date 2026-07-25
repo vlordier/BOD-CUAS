@@ -51,8 +51,6 @@ wait_log() {
   printf '%-28s ✅\n' "$label"
 }
 
-AUTO_EXIT="${GOLDEN_EXIT_AFTER_ACCEPTANCE:-0}"
-
 if [[ "${1:-}" == "--doctor" ]]; then exec bash "$SCRIPT_DIR/doctor.sh"; fi
 bash "$SCRIPT_DIR/doctor.sh"
 echo
@@ -106,6 +104,7 @@ wait_http http://127.0.0.1:3227/api/v1/scenarios 'S1 Sim Server' 90
 echo '=== Start C-UAS health injector ==='
 "$S1/target/release/cuas-health-injector" --nats-url "$NATS_URL" >"$LOG_DIR/s1-health.log" 2>&1 & ALL_PIDS+=("$!")
 wait_log "$LOG_DIR/s1-health.log" 'cuas-health-injector: subscribed to' 'C-UAS health injector' 15
+wait_log "$LOG_DIR/s1-health.log" 'subscribed to swarm.command.abort' 'C-UAS abort evidence bridge' 15
 
 echo '=== Start SAPIENT simulator ==='
 NATS_URL="$NATS_URL" "$CORE/target/release/sapient-simulator" --target-lat=44.8283 --target-lon=-0.7156 >"$LOG_DIR/sapient.log" 2>&1 & ALL_PIDS+=("$!")
@@ -127,7 +126,7 @@ echo '  Verifiers started'
 sleep 2  # Allow subscriptions to establish before replay starts
 
 echo '=== Start deterministic replay ==='
-NATS_URL="$NATS_URL" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 & ALL_PIDS+=("$!")
+DEMO_SPEED=1 NATS_URL="$NATS_URL" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 & ALL_PIDS+=("$!")
 
 cat <<BODEOF
 
@@ -193,6 +192,6 @@ else
   echo '============================================'
 fi
 
-if [[ "$AUTO_EXIT" == "1" ]]; then
-  if $PASSED; then exit 0; else exit 1; fi
-fi
+# A golden-demo invocation is an acceptance command, not an interactive
+# dashboard.  Its shell status must always represent the verifier outcome.
+if $PASSED; then exit 0; else exit 1; fi

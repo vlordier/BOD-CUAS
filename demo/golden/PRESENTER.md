@@ -26,16 +26,16 @@ This demo proves the full multi-repository runtime chain for a C-UAS scenario at
 | 25s | RF bearing + TDOA fix | Replay | Stimulus |
 | 30s | Acoustic corroboration | Replay | Stimulus |
 | 39.5s | Fresh observation with velocity | Replay → Core | Observation |
-| 40s | **Named operator authorization** | Replay | **Trigger** |
-| ~40s | **Core publishes mission delegation** | **Core** | **Authority** |
-| 50s | Comms loss injection | Replay | Stimulus |
-| ~50s | **S1 executes lost-link continuation** | **S1 → Core** | **Evidence** |
-| 60s | Comms recovery injection | Replay | Stimulus |
-| ~60s | **S1 resumes normal execution** | **S1 → Core** | **Evidence** |
-| 70s | Civilian aircraft conflict | Replay | Stimulus |
-| ~70s | **Core issues safety abort** | **Core** | **Authority** |
-| ~70s | **S1 reaches Aborted/SafeHold** | **S1 → Core** | **Evidence** |
-| 90s | Scenario complete | Replay | Stimulus |
+| 44.5s | Operator-authorization replay fallback | Replay → Core | Trigger |
+| ~44.5s | **Core publishes mission delegation** | **Core** | **Authority** |
+| 54.5s | Comms loss injection | Replay | Stimulus |
+| ~54.5s | **S1 emits bounded lost-link continuation** | **S1 → Core** | **Evidence** |
+| 64.5s | Comms recovery injection | Replay | Stimulus |
+| ~64.5s | **S1 emits normal recovery** | **S1 → Core** | **Evidence** |
+| 74.5s | Civilian aircraft conflict | Replay | Stimulus |
+| ~74.5s | **Core issues safety abort** | **Core** | **Authority** |
+| ~74.5s | **S1 emits contract-correlated safety hold** | **S1 → Core** | **Evidence** |
+| 94.5s | Scenario complete | Replay | Stimulus |
 
 ## Presenter Script
 
@@ -63,7 +63,7 @@ Presenter says (while demo runs):
   "The demo injects deterministic surveillance stimuli — ASTERIX CAT015/129
    tracks, RF bearings, acoustic data — into the Core. Core owns all
    authority: it fuses observations, applies authorization policy, and
-   waits for a named operator command."
+   waits for an operator authorization command."
 
   [~5s] "A non-cooperative track appears on the runway approach.
           Sensor degradation is reported."
@@ -71,10 +71,9 @@ Presenter says (while demo runs):
   [~25s] "RF sensors triangulate the threat origin. Acoustic sensors
            corroborate. Core infers a probable launch zone."
 
-  [~44s] "⚠ OPERATOR DECISION REQUIRED — the C2 shows a modal asking
-           the operator to authorize interception. The operator reviews
-           the threat: track 4660, runway 23 approach, non-lethal track
-           & shadow only. They click AUTHORIZE INTERCEPTION."
+  [~44s] "The replay provides the authorized-intercept trigger for track
+           4660. In the C2 exercise flow, an operator may authorize earlier;
+           the fallback keeps the replay deterministic."
 
   [~44s] "Core creates a bounded mission delegation — 300 seconds of
            authority, non-lethal track-and-shadow only."
@@ -86,9 +85,12 @@ Presenter says (while demo runs):
 
   [~74s] "⚠ CIVILIAN CONFLICT — a civilian aircraft (AFR762) conflicts
            with the response volume. Core issues a safety abort.
-           S1 reaches Aborted/SafeHold."
+           S1's simulation injector validates the Core command against the
+           retained delegation before publishing contract-correlated
+           aborted/safety-hold evidence. The replay does not fabricate it."
 
-  [~94s] "Scenario complete. All services remain alive."
+  [~94s] "Scenario complete. The verifier proves the Core abort and the
+           matching S1 safety-hold acknowledgement for the same contract."
 ```
 
 ### Verification (1 min)
@@ -103,6 +105,10 @@ Actions:
     ✅ verify-origin.log: PASS   (delegation payload validated)
     ✅ verify-comm-denied.log: PASS (lost-link + recovery proven)
 ```
+
+`verify.log` additionally proves the abort is for the delegated mission and
+target, then that S1's `aborted/safety_hold` evidence carries the same contract
+correlation ID and Core policy. A merely observed abort is not sufficient.
 
 ### C2 Visual (2 min)
 
@@ -120,7 +126,7 @@ Actions:
     • Degraded mode indicator + rejection reason
     • ⚠ SAFETY CONFLICT card (appears at ~74s): flight ID, track ID, policy
     • Real-time execution timeline
-    • ✓ SCENARIO COMPLETE summary card (appears at ~94s): metrics
+    • Scenario-complete state (appears at ~94s) after safe-hold evidence is observed
 
   - Point to the map:
     • Bordeaux LFBD operational map with OSM tiles
@@ -144,6 +150,9 @@ make demo
 
 # Check prerequisites
 make doctor
+
+# Capture the live C2 experience (PNG evidence in ${TMPDIR}/furia-bod-golden-captures)
+SKIP_BUILD=1 make capture
 
 # Clean state
 make clean
@@ -186,4 +195,5 @@ This demo:
 - Uses **deterministic simulated** surveillance inputs
 - Demonstrates **Core-owned** inference and **bounded non-lethal** response delegation
 - Demonstrates **safety-policy** abort
+- Uses a **simulation-only** S1 abort bridge; it is not a production flight-execution integration
 - Does **not** claim: certified ATC integration, automatic runway closure authority, autonomous detect-to-defeat, real Bordeaux sensor coverage, legal authority for RF or kinetic effects, or production safety certification", "file_path": "/Users/vincent/Work/BOD-CUAS/demo/golden/PRESENTER.md"}

@@ -22,6 +22,10 @@ SCENARIO_STATUS_SUBJECT = "scenario.status"
 OPERATOR_AUTHORIZED_SUBJECT = "operator.action.authorized"
 S1_EXECUTION_HEALTH_SUBJECT = "s1.sim.execution-health"
 SAFETY_CIVILIAN_CONFLICT_SUBJECT = "safety.civilian_aircraft_conflict"
+# Additive, C2-only read model. Core does not consume this subject; it exists so
+# the demo can render an honest operational picture without decorating or
+# weakening the versioned Core input contracts above.
+OPERATIONAL_CONTEXT_SUBJECT = "cuas.operational.context"
 
 
 def publish(sock: socket.socket, subject: str, payload: dict) -> None:
@@ -116,6 +120,15 @@ def main() -> None:
                 p["track_observed_at_ms"] = now_ms
             emit(at_s, subject, payload, inject=_inject)
 
+        def emit_operational_context(at_s: float, payload: dict) -> None:
+            """Emit the additive C2 read model with its own event timestamp.
+
+            This intentionally does not add fields to Core-owned stimuli.
+            """
+            def _inject(p: dict) -> None:
+                p["occurred_at_ms"] = int(time.time() * 1000)
+            emit(at_s, OPERATIONAL_CONTEXT_SUBJECT, payload, inject=_inject)
+
         def emit_obs(at_s: float, subject: str, **obs_kw) -> None:
             """Emit an observation with fresh timestamps captured at publication time."""
             def _inject(p: dict) -> None:
@@ -129,6 +142,33 @@ def main() -> None:
         # 0 s: scenario start
         emit(0.0, SCENARIO_STATUS_SUBJECT, {
             "id": "bod-cuas-golden", "state": "running", "tick": 0, "elapsed_sec": 0,
+        })
+        emit_operational_context(0.1, {
+            "schema": "furia.cuas.operational-context",
+            "version": "1.0.0",
+            "scenario_id": "bod-cuas-golden",
+            "phase": "surveillance",
+            "airport": {
+                "icao": "LFBD", "name": "Bordeaux-Merignac",
+                "active_runway": "05/23", "affected_sector": None,
+                "mode": "training_replay",
+            },
+            "threat": {
+                "track_id": "4660", "classification": "pending_detection",
+                "cooperative": None, "authorization": "unknown",
+                "confidence_permille": 0, "source_summary": [],
+                "data_freshness_ms": 0, "predicted_entry": None,
+            },
+            "authority": {
+                "posture": "surveillance_only", "scope": None,
+                "authority_source": None, "valid_for_sec": 0,
+                "constraints": ["no_autonomous_detect_to_defeat"],
+                "execution_acknowledgement": "not_applicable",
+            },
+            "safety": {
+                "state": "normal", "policy": None, "civil_flight": None,
+                "operator_action": "none",
+            },
         })
 
         # 1 s: CAT129 authorized cooperative UAS (track 7001)
@@ -214,6 +254,36 @@ def main() -> None:
             "bearing_cdeg": 32000, "confidence_permille": 600,
             "frequency_mhz": None,
         })
+        emit_operational_context(30.1, {
+            "schema": "furia.cuas.operational-context", "version": "1.0.0",
+            "scenario_id": "bod-cuas-golden", "phase": "assessment",
+            "airport": {
+                "icao": "LFBD", "name": "Bordeaux-Merignac",
+                "active_runway": "05/23", "affected_sector": "RWY23 approach",
+                "mode": "training_replay",
+            },
+            "threat": {
+                "track_id": "4660", "classification": "non_cooperative_uas",
+                "cooperative": False, "authorization": "unknown",
+                "confidence_permille": 880,
+                "source_summary": ["radar-low-altitude", "eo-ir", "rf-tdoa", "acoustic-array-01"],
+                "data_freshness_ms": 350,
+                "predicted_entry": {
+                    "volume_id": "approach-rwy23", "runway_or_sector": "RWY23",
+                    "time_to_entry_ms": 37000, "horizontal_uncertainty_mm": 2000,
+                },
+            },
+            "authority": {
+                "posture": "recommendation_only", "scope": None,
+                "authority_source": None, "valid_for_sec": 0,
+                "constraints": ["named_authority_required", "no_effect_authority"],
+                "execution_acknowledgement": "not_applicable",
+            },
+            "safety": {
+                "state": "elevated", "policy": None, "civil_flight": None,
+                "operator_action": "operator_decision_required",
+            },
+        })
 
         # 44.0 s: fresh observation with velocity (0.5s before authorization — within track-age window)
         emit_obs(44.0, OBSERVATION_SUBJECT,
@@ -234,6 +304,33 @@ def main() -> None:
             "authorization_id": "bod-demo-auth-4660",
             "authorized": True,
         })
+        emit_operational_context(44.6, {
+            "schema": "furia.cuas.operational-context", "version": "1.0.0",
+            "scenario_id": "bod-cuas-golden", "phase": "bounded_execution",
+            "airport": {
+                "icao": "LFBD", "name": "Bordeaux-Merignac",
+                "active_runway": "05/23", "affected_sector": "RWY23 approach",
+                "mode": "training_replay",
+            },
+            "threat": {
+                "track_id": "4660", "classification": "non_cooperative_uas",
+                "cooperative": False, "authorization": "unknown",
+                "confidence_permille": 880,
+                "source_summary": ["radar-low-altitude", "eo-ir", "rf-tdoa"],
+                "data_freshness_ms": 120, "predicted_entry": {
+                    "volume_id": "approach-rwy23", "runway_or_sector": "RWY23",
+                    "time_to_entry_ms": 22500, "horizontal_uncertainty_mm": 2000,
+                },
+            },
+            "authority": {
+                "posture": "bounded_intercept", "scope": "track:4660 / shadow-intercept only",
+                "authority_source": "exercise-authority", "valid_for_sec": 270,
+                "constraints": ["no_effect_authority", "civilian_conflict_inhibits_execution"],
+                "execution_acknowledgement": "delegation_pending",
+            },
+            "safety": {"state": "elevated", "policy": None, "civil_flight": None,
+                       "operator_action": "none"},
+        })
 
         # Subscribe to operator.action.authorized to detect deny
         # If operator denied, skip the rest of the scenario
@@ -246,6 +343,23 @@ def main() -> None:
             "navigation_safe": True,
             "authority_valid": True,
         })
+        emit_operational_context(54.6, {
+            "schema": "furia.cuas.operational-context", "version": "1.0.0",
+            "scenario_id": "bod-cuas-golden", "phase": "bounded_continuation",
+            "airport": {"icao": "LFBD", "name": "Bordeaux-Merignac", "active_runway": "05/23",
+                        "affected_sector": "RWY23 approach", "mode": "training_replay"},
+            "threat": {"track_id": "4660", "classification": "non_cooperative_uas",
+                       "cooperative": False, "authorization": "unknown", "confidence_permille": 840,
+                       "source_summary": ["eo-ir", "rf-tdoa"], "data_freshness_ms": 900,
+                       "predicted_entry": {"volume_id": "approach-rwy23", "runway_or_sector": "RWY23",
+                                           "time_to_entry_ms": 14000, "horizontal_uncertainty_mm": 3500}},
+            "authority": {"posture": "bounded_continuation", "scope": "track:4660 / shadow-intercept only",
+                          "authority_source": "exercise-authority", "valid_for_sec": 240,
+                          "constraints": ["no_effect_authority", "contract_expiry_enforced"],
+                          "execution_acknowledgement": "comms_degraded"},
+            "safety": {"state": "elevated", "policy": None, "civil_flight": None,
+                       "operator_action": "none"},
+        })
 
         # 64.5 s: comms recovery simulation health injection
         emit_with_now(64.5, S1_EXECUTION_HEALTH_SUBJECT, {
@@ -256,6 +370,25 @@ def main() -> None:
         })
 
         # 74.5 s: civilian aircraft conflict
+        emit_operational_context(74.4, {
+            "schema": "furia.cuas.operational-context", "version": "1.0.0",
+            "scenario_id": "bod-cuas-golden", "phase": "safety_abort_pending_execution_evidence",
+            "airport": {"icao": "LFBD", "name": "Bordeaux-Merignac", "active_runway": "05/23",
+                        "affected_sector": "RWY23 approach", "mode": "training_replay"},
+            "threat": {"track_id": "4660", "classification": "non_cooperative_uas",
+                       "cooperative": False, "authorization": "unknown", "confidence_permille": 860,
+                       "source_summary": ["radar-low-altitude", "eo-ir", "rf-tdoa"], "data_freshness_ms": 350,
+                       "predicted_entry": {"volume_id": "approach-rwy23", "runway_or_sector": "RWY23",
+                                           "time_to_entry_ms": 4800, "horizontal_uncertainty_mm": 2500}},
+            "authority": {"posture": "intercept_inhibited", "scope": "track:4660 / shadow-intercept only",
+                          "authority_source": "exercise-authority", "valid_for_sec": 220,
+                          "constraints": ["no_effect_authority", "civilian_conflict_inhibits_execution"],
+                          "execution_acknowledgement": "pending_safe_hold_evidence"},
+            "safety": {"state": "abort_issued", "policy": "BOD-RWY-FRATRICIDE-003",
+                       "civil_flight": {"callsign": "AFR762", "phase": "arrival",
+                                        "affected_sector": "RWY23 approach"},
+                       "operator_action": "none_wait_for_safe_hold_evidence"},
+        })
         emit(74.5, SAFETY_CIVILIAN_CONFLICT_SUBJECT, {
             "mission_id": "perimeter_defense_fob",
             "flight_id": "AFR762",

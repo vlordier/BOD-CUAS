@@ -18,12 +18,54 @@ SUBJECTS = [
     "scenario.status",
     "furia.s1.mission-delegation",
     "swarm.command.abort",
+    "furia.s1.execution-evidence",
 ]
+
+
+def delegation_contract(payload: dict) -> dict | None:
+    """Extract the only safe join key available for Core abort commands.
+
+    Core's canonical abort does not carry an S1 correlation ID. The verifier
+    therefore joins it to the delegation by mission + delegated target track,
+    then requires S1's evidence to carry that delegation correlation ID.
+    """
+    constraints = payload.get("cuas_constraints") or {}
+    target = constraints.get("target") or {}
+    mission_id = payload.get("mission_id")
+    correlation_id = payload.get("correlation_id")
+    track_id = target.get("track_id")
+    if not all(isinstance(value, str) and value.strip() for value in (mission_id, correlation_id, track_id)):
+        return None
+    return {
+        "mission_id": mission_id,
+        "correlation_id": correlation_id,
+        "track_id": track_id,
+    }
+
+
+def abort_matches_contract(payload: dict, contract: dict) -> bool:
+    return (
+        payload.get("action") == "abort"
+        and payload.get("source") == "core-safety-policy"
+        and payload.get("policy_id") == "BOD-RWY-FRATRICIDE-003"
+        and payload.get("mission_id") == contract["mission_id"]
+        and payload.get("track_id") == contract["track_id"]
+    )
+
+
+def safe_hold_matches_contract(payload: dict, contract: dict) -> bool:
+    return (
+        payload.get("contract_id") == contract["correlation_id"]
+        and payload.get("state") == "aborted"
+        and payload.get("degraded_mode") == "safety_hold"
+        and payload.get("rejection_reason") == "core_safety_abort"
+        and "BOD-RWY-FRATRICIDE-003" in payload.get("active_constraint_ids", [])
+    )
 
 
 def main() -> int:
     # Use timeout as outer safety net, --count as inner limiter
-    sub_cmd = ["timeout", str(int(TIMEOUT_SEC)), "nats", "sub", "-s", NATS_URL, "--count", "8"] + SUBJECTS
+    sub_cmd = ["timeout", str(int(TIMEOUT_SEC)), "nats", "sub", "-s", NATS_URL, "--count", "7"] + SUBJECTS
 
     print(f"verify.py: monitoring {len(SUBJECTS)} subjects on {NATS_URL}", flush=True)
 
@@ -45,6 +87,9 @@ def main() -> int:
     # Payload validation counters
     delegation_valid = False
     abort_valid = False
+    safe_hold_valid = False
+    contract: dict | None = None
+    current_subject: str | None = None
 
     try:
         for line in proc.stdout or []:
@@ -53,6 +98,7 @@ def main() -> int:
             if line.startswith("[#"):
                 if 'Received on "' in line:
                     subj = line.split('Received on "')[1].split('"')[0]
+                    current_subject = subj
                     now = time.monotonic()
                     if subj not in first_seen:
                         first_seen[subj] = now
@@ -66,22 +112,28 @@ def main() -> int:
                     elif subj == "swarm.command.abort":
                         abort_command_seen = True
                         print(f"  ✓ ABORT COMMAND observed", flush=True)
+                    elif subj == "furia.s1.execution-evidence":
+                        print(f"  ✓ EXECUTION EVIDENCE observed", flush=True)
             elif line.startswith("{"):
                 # JSON payload line — validate content
                 try:
                     payload = json.loads(line)
-                    # Check delegation payload (snake_case from Rust serde)
-                    if payload.get("correlation_id") and payload.get("mission_id"):
-                        if payload["mission_id"] == "perimeter_defense_fob":
+                    if current_subject == "furia.s1.mission-delegation":
+                        candidate = delegation_contract(payload)
+                        if candidate and candidate["mission_id"] == "perimeter_defense_fob":
+                            contract = candidate
                             delegation_valid = True
                             print(f"  ✓ Delegation payload: mission={payload['mission_id']}, "
                                   f"correlation={payload['correlation_id']}", flush=True)
-                    # Check abort payload (snake_case from Rust serde — field is policy_id, not policy)
-                    if payload.get("policy_id") and payload.get("track_id"):
-                        if payload["policy_id"] == "BOD-RWY-FRATRICIDE-003":
+                    elif current_subject == "swarm.command.abort":
+                        if contract and abort_matches_contract(payload, contract):
                             abort_valid = True
-                            print(f"  ✓ Abort payload: policy={payload['policy_id']}, "
-                                  f"track={payload['track_id']}", flush=True)
+                            print(f"  ✓ Abort correlated: mission={payload['mission_id']}, "
+                                  f"track={payload['track_id']}, contract={contract['correlation_id']}", flush=True)
+                    elif current_subject == "furia.s1.execution-evidence":
+                        if contract and abort_valid and safe_hold_matches_contract(payload, contract):
+                            safe_hold_valid = True
+                            print(f"  ✓ S1 SAFE HOLD correlated: contract={contract['correlation_id']}", flush=True)
                 except json.JSONDecodeError:
                     pass
     except Exception as e:
@@ -117,9 +169,15 @@ def main() -> int:
         passed = False
 
     if abort_valid:
-        print("  ✓ Payload: abort fields valid", flush=True)
+        print("  ✓ Payload: Core abort matches delegated mission and target", flush=True)
     else:
-        errors.append("FAIL: abort payload missing required fields")
+        errors.append("FAIL: abort does not match delegated mission and target")
+        passed = False
+
+    if safe_hold_valid:
+        print("  ✓ Evidence: S1 safe hold acknowledges the Core abort contract", flush=True)
+    else:
+        errors.append("FAIL: no contract-correlated S1 safe-hold evidence after Core abort")
         passed = False
 
     # Ordering: delegation should come before abort

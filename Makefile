@@ -1,9 +1,12 @@
-.PHONY: demo golden doctor clean
+.PHONY: demo golden capture doctor clean
 
 # Bordeaux C-UAS Golden Demo — one-command entry points
 
 demo golden: ## Run the full golden demo end-to-end
 	GOLDEN_EXIT_AFTER_ACCEPTANCE=1 bash demo/golden/smoke.sh
+
+capture: ## Run the live demo and capture C2 authority transitions
+	node demo/golden/capture_c2.mjs
 
 doctor: ## Check prerequisites for the golden demo
 	bash demo/golden/doctor.sh

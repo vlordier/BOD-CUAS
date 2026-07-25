@@ -8,139 +8,122 @@ acceptance_metrics:
   track_continuity_pct_min: 95
   stale_track_max_ms: 5000
   require_sensor_degradation_visibility: true
-  require_safe_recovery_evidence: true
+  require_contract_correlated_safe_hold_evidence: true
+
+# This is a trace of replay.py's emitted stimuli/read-model transitions.
+# Expected Core/S1 outputs are named only where the verifiers observe them.
+# The simulation-only S1 injector validates Core's abort against its retained
+# delegation, then emits contract-correlated safe-hold evidence.
 steps:
   - at_s: 0
     id: scenario-start
-    event: scenario.started
+    subject: scenario.status
+    event: running
+    c2_context_phase: surveillance
+
+  - at_s: 1
+    id: authorized-inspection-uas
+    subject: surveillance.observation
+    track_id: "7001"
+    expected_authorization: authorized
+
+  - at_s: 2
+    id: unknown-cooperative-uas
+    subject: surveillance.observation
+    track_id: "7002"
+    expected_authorization: unknown
+
+  - at_s: 3
+    id: unauthorized-cooperative-uas
+    subject: surveillance.observation
+    track_id: "7003"
+    expected_authorization: unauthorized
+
+  - at_s: 4
+    id: rogue-detected
+    subject: surveillance.observation
+    track_id: "4660"
+    classification: non_cooperative_target
 
   - at_s: 5
-    id: authorized-inspection-uas
-    event: surveillance.cooperative_uas
-    track_id: uas-authorized-01
-    identity: "uas:FR:DJI:M30:010203"
-    expected_authorization: authorized
-    expected_threat_state: unknown
-    expected_recommendation: none
-
-  - at_s: 10
-    id: unknown-cooperative-uas
-    event: surveillance.cooperative_uas
-    track_id: uas-unknown-01
-    identity: "uas:FR:UNKNOWN:000001"
-    expected_authorization: unknown
-    expected_threat_state: investigate
-    expected_recommendation: monitor
-
-  - at_s: 18
-    id: expired-known-uas
-    event: surveillance.cooperative_uas
-    track_id: uas-expired-01
-    identity: "uas:FR:DJI:M30:EXPIRED"
-    expected_authorization: unauthorized
-    expected_threat_state: unauthorized
-
-  - at_s: 20
-    id: rogue-detected
-    event: surveillance.noncooperative_uas
-    track_id: uas-rogue-042
-    sensors: [radar-low-altitude, eo-ir]
-    expected_threat_state: investigate
-
-  - at_s: 25
-    id: rf-silent-confirmation
-    event: surveillance.noncooperative_uas.confirmed
-    track_id: uas-rogue-042
-    rf_control_link_detected: false
-    sensors: [radar-low-altitude, eo-ir]
-    assertion: detection_must_not_depend_on_rf
-
-  - at_s: 30
-    id: runway-risk-60s
-    event: cuas.risk.protected_volume
-    track_id: uas-rogue-042
-    volume_id: approach-rwy23
-    runway_or_sector: RWY23
-    horizon_sec: 60
-    predicted_entry_in_ms: 37000
-    expected_threat_state: credible_threat
-    expected_recommendation: protect_volume
-
-  - at_s: 32
     id: sensor-degraded
-    event: surveillance.sensor.status
+    subject: surveillance.sensor.status
     sensor: radar-low-altitude
     status: degraded
     assertion: threat_must_not_clear_from_sensor_loss_alone
-    expected_sensor_coverage_degraded: true
 
-  - at_s: 35
-    id: plan-ready
-    event: swarm.plan.ready
-    interceptors: 2
-    authority: recommend
-    expected_direct_s1_dispatch: false
+  - at_s: 25
+    id: rf-origin-observations
+    subject: surveillance.origin.bearing
+    track_id: "4660"
+    sensors: [rf-sensor-01, rf-sensor-02]
 
-  - at_s: 40
-    id: incident-ack-required
-    event: cuas.incident.state
-    incident_id: bod-cuas-001
-    operator_acknowledgement_required: true
-    mitigation_authorized: false
-    expected_recommendation: restrict_affected_runway_or_sector
+  - at_s: 26
+    id: rf-tdoa-fix
+    subject: surveillance.origin.tdoa_fix
+    track_id: "4660"
 
-  - at_s: 45
-    id: operator-authorized-bounded-response
-    event: operator.action.authorized
-    action: bounded_intercept_shadow
-    decision_authority: exercise-authority
-    assertion: named_authority_required
+  - at_s: 30
+    id: acoustic-corroboration-and-assessment-context
+    subject: cuas.operational.context
+    c2_context_phase: assessment
+    track_id: "4660"
+    predicted_entry_in_ms: 37000
+    runway_or_sector: RWY23
 
-  - at_s: 50
-    id: swarm-execute
-    event: swarm.execution.started
-    expected_chain: core_delegation_to_s1
+  - at_s: 44
+    id: fresh-rogue-observation
+    subject: surveillance.observation
+    track_id: "4660"
+    velocity_ned_mm_s: [1200, -300, 0]
 
-  - at_s: 62
-    id: second-rogue
-    event: surveillance.noncooperative_uas
-    track_id: uas-rogue-043
-    assertion: multiple_tracks_remain_distinct
+  - at_s: 44.5
+    id: replay-authorization-fallback
+    subject: operator.action.authorized
+    track_id: "4660"
+    action: intercept
+    expected_authoritative_output: furia.s1.mission-delegation
 
-  - at_s: 70
-    id: s1-comms-degraded
-    event: s1.execution.degraded
-    mode: degraded_communications
-    assertion: continuation_bounded_by_contract_expiry
+  - at_s: 44.6
+    id: bounded-execution-context
+    subject: cuas.operational.context
+    c2_context_phase: bounded_execution
+    authority_posture: bounded_intercept
 
-  - at_s: 80
-    id: civilian-conflict
-    event: safety.civilian_aircraft_conflict
+  - at_s: 54.5
+    id: comms-loss-injection
+    subject: s1.sim.execution-health
+    comms_available: false
+    expected_execution_evidence: active/lost_link_continuation
+
+  - at_s: 54.6
+    id: bounded-continuation-context
+    subject: cuas.operational.context
+    c2_context_phase: bounded_continuation
+
+  - at_s: 64.5
+    id: comms-recovery-injection
+    subject: s1.sim.execution-health
+    comms_available: true
+    expected_execution_evidence: active/normal
+
+  - at_s: 74.4
+    id: civilian-conflict-context
+    subject: cuas.operational.context
+    c2_context_phase: safety_abort_pending_execution_evidence
     flight_id: AFR762
-    protected_volume: moving-aircraft-AFR762
-    expected_threat_state: immediate_flight_safety_risk
-
-  - at_s: 81
-    id: automatic-safety-abort
-    event: swarm.execution.aborted
     policy: BOD-RWY-FRATRICIDE-003
-    assertion: civilian_protection_overrides_intercept
 
-  - at_s: 88
-    id: safe-recovery
-    event: s1.execution.evidence
-    degraded_mode: safety_hold
-    rejection_reason: safety_invariant_unavailable
-    assertion: evidence_export_required
+  - at_s: 74.5
+    id: civilian-conflict-stimulus
+    subject: safety.civilian_aircraft_conflict
+    flight_id: AFR762
+    track_id: "4660"
+    expected_authoritative_output: swarm.command.abort
+    expected_execution_evidence: aborted/safety_hold (contract-correlated)
 
-  - at_s: 95
-    id: incident-resolved
-    event: cuas.incident.state
-    incident_id: bod-cuas-001
-    expected_threat_state: resolved
-    mitigation_authorized: false
-    audit_reason: safe-recovery-confirmed
-
-  - at_s: 100
+  - at_s: 94.5
     id: scenario-complete
-    event: scenario.completed
+    subject: scenario.status
+    event: complete
+    note: Core abort and contract-correlated S1 safe-hold evidence are required acceptance evidence.

@@ -1,0 +1,36 @@
+{
+  "schema": "furia.golden.integration-manifest",
+  "version": "1.0.0",
+  "scenario_id": "bod-cuas-golden",
+  "description": "Cross-repository source selection for the Bordeaux golden demo. Development refs keep local and branch CI usable; replace pinned_ref with an immutable 40-character Git SHA after the participating changes are committed.",
+  "repositories": [
+    {
+      "id": "furia_core",
+      "path": "furia-core",
+      "repository": "furia-io/furia-core",
+      "development_ref": "golden-demo-observation-subscriber",
+      "pinned_ref": null
+    },
+    {
+      "id": "furia_ui",
+      "path": "furia-ui",
+      "repository": "furia-io/furia-ui",
+      "development_ref": "master",
+      "pinned_ref": null
+    },
+    {
+      "id": "furia_c2",
+      "path": "furia-c2",
+      "repository": "furia-io/furia-c2",
+      "development_ref": "golden-demo-script",
+      "pinned_ref": null
+    },
+    {
+      "id": "s1",
+      "path": "S1",
+      "repository": "furia-io/S1",
+      "development_ref": "golden-demo-cuas-health-injector",
+      "pinned_ref": null
+    }
+  ]
+}

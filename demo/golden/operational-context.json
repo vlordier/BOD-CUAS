@@ -1,0 +1,64 @@
+{
+  "schema": "furia.cuas.operational-context",
+  "version": "1.0.0",
+  "subject": "cuas.operational.context",
+  "purpose": "Additive C2 read model for the deterministic Bordeaux golden demo. This is not an authoritative command, surveillance observation, or safety decision input.",
+  "required": [
+    "schema",
+    "version",
+    "scenario_id",
+    "occurred_at_ms",
+    "phase",
+    "airport",
+    "threat",
+    "authority",
+    "safety"
+  ],
+  "example": {
+    "schema": "furia.cuas.operational-context",
+    "version": "1.0.0",
+    "scenario_id": "bod-cuas-golden",
+    "occurred_at_ms": 1735689600000,
+    "phase": "safety_abort_pending_execution_evidence",
+    "airport": {
+      "icao": "LFBD",
+      "name": "Bordeaux-Merignac",
+      "active_runway": "05/23",
+      "affected_sector": "RWY23 approach",
+      "mode": "training_replay"
+    },
+    "threat": {
+      "track_id": "4660",
+      "classification": "non_cooperative_uas",
+      "cooperative": false,
+      "authorization": "unknown",
+      "confidence_permille": 880,
+      "source_summary": ["radar-low-altitude", "eo-ir", "rf-tdoa"],
+      "data_freshness_ms": 350,
+      "predicted_entry": {
+        "volume_id": "approach-rwy23",
+        "runway_or_sector": "RWY23",
+        "time_to_entry_ms": 37000,
+        "horizontal_uncertainty_mm": 2000
+      }
+    },
+    "authority": {
+      "posture": "intercept_inhibited",
+      "scope": "track:4660 / shadow-intercept only",
+      "authority_source": "exercise-authority",
+      "valid_for_sec": 270,
+      "constraints": ["no_effect_authority", "civilian_conflict_inhibits_execution"],
+      "execution_acknowledgement": "pending_safe_hold_evidence"
+    },
+    "safety": {
+      "state": "abort_issued",
+      "policy": "BOD-RWY-FRATRICIDE-003",
+      "civil_flight": {
+        "callsign": "AFR762",
+        "phase": "arrival",
+        "affected_sector": "RWY23 approach"
+      },
+      "operator_action": "none_wait_for_safe_hold_evidence"
+    }
+  }
+}
