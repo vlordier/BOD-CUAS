@@ -2,3 +2,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Original LFBD elevation downloads are large reproducible inputs; keep the
+# provenance manifests and derived context grids versioned instead.
+/data/geospatial/lfbd/raw/
