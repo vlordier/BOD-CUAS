@@ -11,17 +11,9 @@ capture: ## Run the live demo and capture C2 authority transitions
 doctor: ## Check prerequisites for the golden demo
 	bash demo/golden/doctor.sh
 
-clean: ## Kill all demo processes and clean state
-	# Kill by binary name with path prefix for safety
-	-pkill -f "target/release/counter-uas-director" 2>/dev/null || true
-	-pkill -f "target/release/furia-core-server" 2>/dev/null || true
-	-pkill -f "target/release/dev-atak-server" 2>/dev/null || true
-	-pkill -f "target/release/s1-sim-server" 2>/dev/null || true
-	-pkill -f "target/release/cuas-health-injector" 2>/dev/null || true
-	-pkill -f "target/release/sapient-simulator" 2>/dev/null || true
-	-pkill -f "nats-server" 2>/dev/null || true
-	-pkill -f "npx vite" 2>/dev/null || true
-	-pkill -f "verify.py" 2>/dev/null || true
-	-pkill -f "replay.py" 2>/dev/null || true
-	rm -rf /tmp/furia-bod-nats-js $${TMPDIR:-/tmp}/furia-bod-golden 2>/dev/null || true
-	@echo "Cleaned up demo state"
+clean: ## Leave unrelated processes and shared temporary state untouched
+	@echo "The golden runner stops only its own children on exit and removes its private NATS state."
+	@echo "No global process or temporary-directory cleanup is performed."
+
+nats-state-isolation-check:
+	bash demo/golden/test_nats_state_isolation.sh

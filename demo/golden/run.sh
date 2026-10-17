@@ -11,6 +11,8 @@ mkdir -p "$LOG_DIR"
 
 ALL_PIDS=()
 ALL_CONTAINERS=()
+source "$SCRIPT_DIR/nats-runtime.sh"
+NATS_STATE_DIR=""
 
 cleanup() {
   local rc=$?
@@ -18,8 +20,10 @@ cleanup() {
   for pid in "${ALL_PIDS[@]:-}"; do kill "$pid" 2>/dev/null || true; done
   for c in "${ALL_CONTAINERS[@]:-}"; do docker rm -f "$c" >/dev/null 2>&1 || true; done
   wait 2>/dev/null || true
-  # Remove NATS JetStream store for deterministic re-run
-  rm -rf /tmp/furia-bod-nats-js 2>/dev/null || true
+  # Only remove the state directory allocated by this runner instance.
+  if [[ -n "$NATS_STATE_DIR" && -f "$NATS_STATE_DIR/.furia-owned" ]]; then
+    rm -rf -- "$NATS_STATE_DIR"
+  fi
   exit "$rc"
 }
 trap cleanup EXIT INT TERM
@@ -57,7 +61,10 @@ echo
 
 echo '=== Start NATS JetStream (TCP + WebSocket) ==='
 if command -v nats-server >/dev/null 2>&1; then
-  nats-server -c "$SCRIPT_DIR/nats.conf" >"$LOG_DIR/nats.log" 2>&1 & ALL_PIDS+=("$!")
+  NATS_STATE_DIR="$(create_demo_nats_state_dir)"
+  touch "$NATS_STATE_DIR/.furia-owned"
+  render_demo_nats_config "$SCRIPT_DIR/nats.conf" "$NATS_STATE_DIR/nats.conf" "$NATS_STATE_DIR" 4222 9222
+  nats-server -c "$NATS_STATE_DIR/nats.conf" >"$LOG_DIR/nats.log" 2>&1 & ALL_PIDS+=("$!")
 else
   name="furia-bod-nats-$$"
   docker run --rm --name "$name" -p 4222:4222 -p 9222:9222 \
