@@ -3,7 +3,7 @@
 > **Date:** 2026-07-23  
 > **Branch:** `golden-demo-bordeaux` (BOD-CUAS), `golden-demo-observation-subscriber` (furia-core),  
 > `golden-demo-cuas-health-injector` (S1), `golden-demo-script` (furia-c2)  
-> **Status:** ✅ All acceptance checks pass
+> **Status:** 🟡 Deterministic fixtures and contract checks pass; full cross-repository live acceptance remains a release gate
 
 ---
 
@@ -55,6 +55,9 @@
 | `furia.s1.execution-evidence` | S1 injector | Verifiers, C2 | `ExecutionEvidenceV1` |
 | `furia.s1.command-ack` | S1 injector | C2 | `{command, mission_id, track_id, contract_id, state, reason, observed_at_ms}` |
 | `swarm.command.abort` | Core | Verifiers, C2 | `{policy_id, track_id, mission_id, metadata: {flight_id}}` |
+| `cuas.operational.context.core` | Core | C2 | Versioned observation-derived read model; no authority |
+| `cuas.feed.provenance` | Live-context bridge / labelled simulator | C2 | External-context provenance; never authority |
+| `environment.weather.observation` | Live-context bridge / labelled simulator | C2 integration boundary | Weather context only |
 
 ### Ports
 
@@ -190,66 +193,23 @@ All verifiers use `timeout` wrapper + `nats sub --count N` for reliable exit.
 
 ## What's Todo
 
-### P0 — Must Fix Before Merge
+### Completed gates
 
-- [ ] **Merge PRs**: Create PRs for all 4 branches, get review, merge to master
-- [ ] **CI verification**: Ensure `golden-contract.yml` runs cleanly in GitHub Actions
-- [ ] **Fresh checkout test**: Verify `make demo` works from a clean `git clone` with all 5 repos
+- [x] Fresh live replay with all three verifiers and correlated S1 safety-hold evidence
+- [x] C2 reconnect, wire normalization, loading/error/empty-state behavior, and configurable WebSocket URL
+- [x] Strict furia-ui lint, typecheck, contract tests, package validation, boundary checks, and bundle budgets
+- [x] CI validation of furia-ui, furia-c2, Rust services, fixtures, and live golden replay
+- [x] ATAK `auto`/`required`/`skip` modes with graceful degradation when port 8080 is occupied
 
-### P1 — Important
+### Production integration roadmap
 
-- [ ] **C2 CuasInfoPanel unit test**: Add SolidJS test that feeds mock NATS messages and asserts correct rendering
-- [ ] **C2 CuasInfoPanel reconnect**: Add WebSocket reconnection logic (currently fails permanently on disconnect)
-- [ ] **C2 CuasInfoPanel `policy` field**: The abort payload has `policy_id` but the `AbortData` interface uses `policy` — rename for consistency
-- [ ] **C2 CuasInfoPanel `flightId`**: The abort payload has `metadata.flight_id` but the `AbortData` interface uses `flightId` — rename for consistency
-- [ ] **C2 CuasInfoPanel `contractRemainingMs`**: The evidence payload has `contract_remaining_ms` but the `EvidenceData` interface uses `contractRemainingMs` — rename for consistency
-- [ ] **C2 CuasInfoPanel `observedAtMs`**: The evidence payload has `observed_at_ms` but the `EvidenceData` interface uses `observedAtMs` — rename for consistency
-- [ ] **C2 CuasInfoPanel `degradedMode`**: The evidence payload has `degraded_mode` but the `EvidenceData` interface uses `degradedMode` — rename for consistency
-- [ ] **C2 CuasInfoPanel `rejectionReason`**: The evidence payload has `rejection_reason` but the `EvidenceData` interface uses `rejectionReason` — rename for consistency
-- [ ] **C2 CuasInfoPanel `contractRemainingMs`**: The evidence payload has `contract_remaining_ms` but the `EvidenceData` interface uses `contractRemainingMs` — rename for consistency
-
-### P2 — Polish
-
-- [ ] **C2 CuasInfoPanel**: Use `@furia/ui` components (`Panel`, `Badge`, `StatusPill`) instead of raw Tailwind classes
-- [ ] **C2 CuasInfoPanel**: Add loading state while NATS connects
-- [ ] **C2 CuasInfoPanel**: Add error state when NATS connection fails
-- [ ] **C2 CuasInfoPanel**: Add empty state when no delegation received
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` env var to run.sh
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to `.env.example`
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to CI workflow
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to PRESENTER.md
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to doctor.sh check
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to run.sh export
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to Makefile
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to smoke.sh
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to bundle_logs.sh
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to acceptance_report.py
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to PRESENTER.md
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to doctor.sh check
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to run.sh export
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to Makefile
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to smoke.sh
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to bundle_logs.sh
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to acceptance_report.py
-
-### P3 — Nice-to-Have
-
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to `.env.example`
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to CI workflow
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to PRESENTER.md
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to doctor.sh check
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to run.sh export
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to Makefile
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to smoke.sh
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to bundle_logs.sh
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to acceptance_report.py
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to PRESENTER.md
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to doctor.sh check
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to run.sh export
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to Makefile
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to smoke.sh
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to bundle_logs.sh
-- [ ] **C2 CuasInfoPanel**: Add `VITE_NATS_WS_URL` to acceptance_report.py
+- [ ] Replace training simulator sources with reviewed airport/ANSP, ADS-B, Remote-ID, and C-UAS sensor adapters
+- [ ] Obtain and validate current LFBD static data under an approved AIRAC/source process
+- [ ] Connect airport operations, USSP, and authority identity systems with explicit trust boundaries
+- [ ] Run security, latency, accessibility, operator-console, and multi-display acceptance tests
+- [ ] Remove legacy GridStack/GrapesJS compatibility adapters after downstream migration
+- [ ] Pin immutable cross-repository refs and run the release-gate workflow
+- [x] Include `VITE_NATS_WS_URL`, NATS, and ATAK runtime configuration in acceptance reports
 
 ---
 
@@ -280,6 +240,20 @@ make clean
 ✅ verify-comm-denied.log: PASS
 ✅ BORDEAUX C-UAS GOLDEN DEMO: PASS
 ```
+
+## Latest local geospatial integration
+
+- ✅ Bounded LFBD Bati3D package acquired from Bordeaux Métropole, integrity
+  verified and indexed (1,260 200 m EPSG:3945 subtiles).
+- ✅ LFBD airport-core subset prepared as 35 textured 3DS/FBX tiles with a
+  reproducible manifest and explicit `historical_open_context` provenance.
+- ✅ RealGazebo import completed through the normal UE 5.8 renderer: all 35
+  tiles are installed under `Bati3D_2012` in the RealGazebo host project and
+  every actor is tagged context-only. The reproducible importer deliberately
+  refuses headless / `-NullRHI` use on this host because the renderer is part
+  of the visual-context validation path.
+- ⚠ Bati3D is a 2012 visual backdrop only. It is never current airport truth,
+  obstacle authority, navigation data, or EO/IR evidence.
 
 ## C2 Visual
 

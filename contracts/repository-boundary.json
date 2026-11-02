@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema": "bod-cuas.repository-boundary",
+  "version": "1.0.0",
+  "purpose": "Canonical ownership and data-flow map for the Bordeaux C-UAS demonstration.",
+  "repositories": {
+    "bod_cuas": {
+      "path": "BOD-CUAS",
+      "remote": "https://github.com/vlordier/BOD-CUAS.git",
+      "role": "airport scenario, synthetic replay, provider fixtures, LFBD demo profile and policy fixtures",
+      "owns": [
+        "synthetic operational events",
+        "scenario timelines and replay controls",
+        "LFBD demo-only geometry references",
+        "versioned airport operational profiles",
+        "airport-specific provider configuration",
+        "demo acceptance and integration fixtures"
+      ],
+      "must_not_own": [
+        "generic coverage equations or geometry types",
+        "shared UI components",
+        "C2 composition code",
+        "operational aviation or navigation authority"
+      ]
+    },
+    "furia_core": {
+      "path": "furia-core",
+      "remote": "https://github.com/vlordier/furia-core.git",
+      "role": "authoritative operational contracts, policy, generic computation and provider boundary",
+      "owns": [
+        "generic coverage and reachability models",
+        "normalized operational events and authority state",
+        "safety and policy evaluation",
+        "provider capability contracts"
+      ],
+      "must_not_own": [
+        "LFBD-specific demo constants in generic crates",
+        "airport imagery or mesh assets",
+        "operator layout and visual styling"
+      ]
+    },
+    "furia_cuas": {
+      "path": "furia-cuas",
+      "remote": "https://github.com/vlordier/furia-cuas.git",
+      "role": "generic C-UAS domain services, SAPIENT adapters and deterministic simulation",
+      "owns": [
+        "C-UAS-specific domain contracts",
+        "sensor/threat/interceptor adapters",
+        "deterministic C-UAS simulator"
+      ],
+      "must_not_own": [
+        "generic Core platform policy",
+        "airport-specific LFBD geometry",
+        "operator UI primitives",
+        "effect execution authority"
+      ],
+      "status": "initial_extraction"
+    },
+    "furia_ui": {
+      "path": "furia-ui",
+      "remote": "https://github.com/vlordier/furia-ui.git",
+      "role": "reusable UI primitives, contracts and 2D/3D operational visualisation",
+      "owns": [
+        "parameterised coverage and world-view primitives",
+        "operator-facing state and evidence components",
+        "locale-aware labels and accessibility behaviour"
+      ],
+      "must_not_own": [
+        "Bordeaux scenario fixtures",
+        "LFBD default data as the only supported world",
+        "Core policy or command execution"
+      ],
+      "transitional": [
+        "LFBDTrainingWorld3D, LFBDBati3DViewer and DEFAULT_LFBD_COVERAGE_PROFILE remain compatibility exports; new hosts should use OperationalWorld3D, OperationalCoverage3DViewer and an injected AirportCoverageProfile"
+      ]
+    },
+    "furia_c2": {
+      "path": "furia-c2",
+      "remote": "https://github.com/vlordier/furia-c2.git",
+      "role": "deployable host, composition, transport adapters and runtime wiring",
+      "owns": [
+        "workspace composition",
+        "Core/UI integration",
+        "runtime connection and lifecycle",
+        "operator session and display selection"
+      ],
+      "must_not_own": [
+        "generic UI primitives",
+        "Core authority decisions",
+        "canonical LFBD geometry or replay fixtures"
+      ],
+      "transitional": [
+        "embedded LFBD constants in Console.tsx are compatibility code and must migrate behind an airport-profile adapter"
+      ]
+    },
+    "bordeaux_cuas_planning": {
+      "path": "perte_nat/bordeaux-cuas-planning",
+      "remote": null,
+      "role": "geospatial planning and screening research workspace",
+      "owns": [
+        "source DEM/DSM and building/terrain preparation",
+        "viewshed and visibility screening",
+        "candidate sensor/interceptor site analysis",
+        "planning optimisation outputs and audit reports"
+      ],
+      "must_not_own": [
+        "live command execution",
+        "operator authority state",
+        "shared Core/UI primitives"
+      ],
+      "export_boundary": "Only validated, versioned, provenance-bearing derived exports are consumed by BOD-CUAS or furia-c2. Raw source archives and multi-gigabyte working files stay in this repository."
+    },
+    "bordeaux_airport_staging": {
+      "path": "BordeauxAirport",
+      "remote": null,
+      "role": "unmanaged raw asset staging directory",
+      "canonical": false,
+      "action": "quarantine",
+      "reason": "Contains a large untracked OBJ copy and is not a versioned source of truth. Keep until hashes and provenance are reconciled with the planning repository."
+    }
+  },
+  "data_flow": [
+    "bod_cuas airport profile -> furia_c2 airport adapter -> generic furia_ui map/3D primitives",
+    "bordeaux_cuas_planning -> validated geospatial export -> bod_cuas airport profile",
+    "bod_cuas synthetic scenario -> furia_core provider boundary -> furia_c2 operational stream",
+    "furia_c2 normalized projection -> furia_ui parameterised workspace",
+    "furia_core policy and safety state -> furia_c2 constrained actions -> furia_ui operator feedback"
+  ],
+  "migration_rules": [
+    "Do not copy generic coverage models into BOD-CUAS or furia-ui.",
+    "Do not copy raw meshes, DEMs or imagery into runtime repositories.",
+    "Every planning export must identify source data, coordinate reference, model version, timestamp and screening status.",
+    "Airport-specific defaults belong in an airport profile or scenario adapter, never in a generic primitive.",
+    "No repository is allowed to imply live ATC, aviation authority or effect authority for synthetic data."
+  ]
+}

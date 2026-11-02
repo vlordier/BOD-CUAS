@@ -2,7 +2,11 @@
 
 ## Overview
 
-This repository documents the C-UAS (Counter-Unmanned Aircraft System) protection architecture for **Bordeaux-Mérignac Airport (ICAO: LFBD, IATA: BOD)**. It captures the relevant primitives, equations, models, and algorithms from the [furia-core](https://github.com/vlordier/furia-core) ecosystem that apply to protecting a civilian airport from drone threats.
+This repository contains the **Bordeaux-Mérignac Airport (ICAO: LFBD, IATA: BOD)** scenario adapter and synthetic
+C-UAS demonstration. Generic contracts, coverage models, policy evaluation and reusable UI primitives live in the
+linked Furia repositories; this repository supplies airport-specific configuration, replay data, provenance and
+acceptance fixtures. See [`contracts/repository-boundary.json`](contracts/repository-boundary.json) for the canonical
+ownership map.
 
 **Airport:** Bordeaux-Mérignac Airport  
 **Location:** 44°49′42″N, 0°42′56″W  
@@ -612,7 +616,10 @@ Solves quadratic for simultaneous arrival: $\|p_T + v_T \cdot t - p_I\| = v_I \c
 
 ## 19. C-UAS Engagement Pipeline
 
-The `counter-uas-director` service in `furia-core` contains a **pipeline orchestrator** (`services/counter-uas-director/src/pipeline.rs`) that chains all C-UAS primitives into a single 10 Hz tick loop:
+The current `counter-uas-director` service in `furia-core` is the transitional Core-side adapter that evaluates the
+normalized C-UAS pipeline. Generic coverage/reachability types are now owned by `furia-coverage-model`; airport
+configuration and synthetic replay remain owned by this repository. The pipeline must not be read as a claim that
+the golden demo is connected to live ATC, airport or effect-control systems.
 
 ```
 ┌─────────────┐    ┌──────────────┐    ┌──────────┐    ┌───────────────┐

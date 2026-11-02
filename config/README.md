@@ -1,6 +1,6 @@
 # Bordeaux C-UAS demo configuration
 
-The C-UAS director loads cooperative-UAS authorization policy from:
+The C-UAS decision/coordination service (`furia-cuas-publisher`) loads cooperative-UAS authorization policy from:
 
 ```text
 $UXV_CONFIG_DIR/cuas-authorizations.yaml
