@@ -1,0 +1,11 @@
+{
+  "schema": "bod-cuas.airport-pack.sectors",
+  "version": "1.0.0",
+  "policy_source": "../../protected-volumes.yaml",
+  "authority_boundary": "training_only",
+  "sectors": [
+    { "id": "airfield", "label": "Plateforme aéroportuaire", "kind": "airfield", "protected_volume_ids": ["runway-05-23-core", "apron-critical"] },
+    { "id": "approach-rwy23", "label": "Approche RWY 23", "kind": "approach", "protected_volume_ids": ["approach-rwy23"] },
+    { "id": "approach-rwy05", "label": "Approche RWY 05", "kind": "approach", "protected_volume_ids": ["approach-rwy05"] }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "bod-cuas.airport-pack-source",
+  "version": "1.0.0",
+  "id": "lfbd-demo-pack",
+  "display_name": "Aéroport de Bordeaux-Mérignac · démonstration synthétique",
+  "authority_boundary": "training_only",
+  "components": {
+    "identity": "identity.json",
+    "geodata": "geodata.json",
+    "sensors": "sensors.json",
+    "sectors": "sectors.json",
+    "scenarios": "scenarios.json"
+  },
+  "provenance": {
+    "source_kind": "demo_fixture",
+    "operational_authority": false
+  }
+}

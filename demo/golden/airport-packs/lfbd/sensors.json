@@ -1,0 +1,15 @@
+{
+  "schema": "bod-cuas.airport-pack.sensors",
+  "version": "1.0.0",
+  "source_catalog": "../../../live-context/source-catalog.json",
+  "authority_boundary": "training_only",
+  "sensors": [
+    { "id": "rf-sensor-01", "modality": "rf", "label": "Récepteur RF 01", "latitude": 44.83, "longitude": -0.72, "altitude_m": 42, "source_id": "rf-geolocation", "status": "simulated" },
+    { "id": "rf-sensor-02", "modality": "rf", "label": "Récepteur RF 02", "latitude": 44.84, "longitude": -0.70, "altitude_m": 48, "source_id": "rf-geolocation", "status": "simulated" },
+    { "id": "rf-sensor-03", "modality": "rf", "label": "Récepteur RF 03", "latitude": 44.82, "longitude": -0.68, "altitude_m": 40, "source_id": "rf-geolocation", "status": "simulated" },
+    { "id": "acoustic-array-01", "modality": "acoustic", "label": "Réseau acoustique 01", "latitude": 44.835, "longitude": -0.71, "altitude_m": 38, "source_id": "acoustic", "status": "simulated" },
+    { "id": "airport-radar-01", "modality": "radar", "label": "Radar primaire aéroport", "latitude": 44.8294, "longitude": -0.7012, "altitude_m": 52, "source_id": "cuas-radar", "status": "simulated" },
+    { "id": "eo-ir-ptz-02", "modality": "eo_ir", "label": "Caméra EO/IR PTZ", "latitude": 44.8341, "longitude": -0.7164, "altitude_m": 46, "source_id": "eo-ir", "status": "simulated" },
+    { "id": "remote-id-01", "modality": "remote_id", "label": "Récepteur Remote ID", "latitude": 44.8258, "longitude": -0.7088, "altitude_m": 35, "source_id": "remote-id-local", "status": "simulated" }
+  ]
+}

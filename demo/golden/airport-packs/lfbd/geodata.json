@@ -1,0 +1,15 @@
+{
+  "schema": "bod-cuas.airport-pack.geodata",
+  "version": "1.0.0",
+  "source_manifest": "../../../../data/lfbd/bati3d/web/manifest.json",
+  "visual_context": "../../lfbd-demo-geodata.json",
+  "world3d": {
+    "asset_base_url": "/lfbd-bati3d",
+    "ground_image_url": "/training-media/lfbd-ign-orthophoto.jpg",
+    "terrain_grid_url": "/data/geospatial/lfbd/terrain-grid.json",
+    "label": "Bati3D 2012 · contexte historique",
+    "status": "historical_context_only"
+  },
+  "layers": ["terrain", "buildings", "runways", "approach_corridors", "protected_volumes"],
+  "authority_boundary": "context_only"
+}

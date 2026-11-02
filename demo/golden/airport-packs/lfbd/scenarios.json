@@ -1,0 +1,10 @@
+{
+  "schema": "bod-cuas.airport-pack.scenarios",
+  "version": "1.0.0",
+  "scenarios": [
+    { "id": "golden-interception-safety-abort", "kind": "deterministic_replay", "entrypoint": "../../replay.py", "timeline": "../../timeline.yaml", "status": "available" },
+    { "id": "multi-threat-saturation", "kind": "resilience", "fixture": "../../../resilience/scenarios/multi-threat-saturation.json", "status": "available" },
+    { "id": "sensor-conflict", "kind": "resilience", "fixture": "../../../resilience/scenarios/sensor-conflict.json", "status": "available" },
+    { "id": "stale-track", "kind": "resilience", "fixture": "../../../resilience/scenarios/stale-track.json", "status": "available" }
+  ]
+}
