@@ -64,8 +64,11 @@ def safe_hold_matches_contract(payload: dict, contract: dict) -> bool:
 
 
 def main() -> int:
-    # Use timeout as outer safety net, --count as inner limiter
-    sub_cmd = ["timeout", str(int(TIMEOUT_SEC)), "nats", "sub", "-s", NATS_URL, "--count", "7"] + SUBJECTS
+    # Subscribe continuously and stop only once the complete causal chain has
+    # been observed.  A fixed message count is unsafe here: replay emits
+    # several scenario-status updates before the abort, so it can exhaust a
+    # small count before the safety evidence arrives.
+    sub_cmd = ["timeout", str(int(TIMEOUT_SEC)), "nats", "sub", "-s", NATS_URL] + SUBJECTS
 
     print(f"verify.py: monitoring {len(SUBJECTS)} subjects on {NATS_URL}", flush=True)
 
@@ -134,6 +137,7 @@ def main() -> int:
                         if contract and abort_valid and safe_hold_matches_contract(payload, contract):
                             safe_hold_valid = True
                             print(f"  ✓ S1 SAFE HOLD correlated: contract={contract['correlation_id']}", flush=True)
+                            break
                 except json.JSONDecodeError:
                     pass
     except Exception as e:

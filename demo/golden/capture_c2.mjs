@@ -13,12 +13,17 @@
 
 import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
+import { createRequire } from "node:module";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { chromium } from "playwright";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+// Playwright belongs to the C2 frontend workspace, not to this orchestration
+// repository.  Resolve it from that declared owner so `make capture` works in
+// a clean BOD-CUAS checkout without a duplicate node_modules tree.
+const c2Workspace = path.resolve(scriptDir, "../../../furia-c2");
+const { chromium } = createRequire(path.join(c2Workspace, "package.json"))("playwright");
 const defaultOutputDir = path.join(
   process.env.TMPDIR || "/tmp",
   "furia-bod-golden-captures",
@@ -38,6 +43,9 @@ function startDemo() {
       // The release capture is deliberately full-speed deterministic. Keep
       // inherited shell/demo settings from compressing the authority timeline.
       DEMO_SPEED: "1",
+      // ATAK is an optional development integration and must not displace an
+      // existing presentation service merely to capture the C2 flow.
+      DEMO_SKIP_ATAK: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

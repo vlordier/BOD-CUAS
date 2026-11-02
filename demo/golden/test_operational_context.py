@@ -17,8 +17,8 @@ class OperationalContextFixtureTests(unittest.TestCase):
 
     def test_fixture_is_versioned_and_explicitly_non_authoritative(self) -> None:
         self.assertEqual(self.fixture["schema"], "furia.cuas.operational-context")
-        self.assertEqual(self.fixture["version"], "1.0.0")
-        self.assertEqual(self.fixture["subject"], "cuas.operational.context")
+        self.assertEqual(self.fixture["version"], "2.0.0")
+        self.assertEqual(self.fixture["subject"], "cuas.operational.context.core")
         self.assertIn("not an authoritative command", self.fixture["purpose"])
 
     def test_abort_example_is_actionable_without_claiming_execution_confirmation(self) -> None:

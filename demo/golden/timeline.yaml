@@ -65,7 +65,7 @@ steps:
 
   - at_s: 30
     id: acoustic-corroboration-and-assessment-context
-    subject: cuas.operational.context
+    subject: cuas.operational.context.core
     c2_context_phase: assessment
     track_id: "4660"
     predicted_entry_in_ms: 37000
@@ -86,7 +86,7 @@ steps:
 
   - at_s: 44.6
     id: bounded-execution-context
-    subject: cuas.operational.context
+    subject: cuas.operational.context.core
     c2_context_phase: bounded_execution
     authority_posture: bounded_intercept
 
@@ -98,7 +98,7 @@ steps:
 
   - at_s: 54.6
     id: bounded-continuation-context
-    subject: cuas.operational.context
+    subject: cuas.operational.context.core
     c2_context_phase: bounded_continuation
 
   - at_s: 64.5
@@ -109,7 +109,7 @@ steps:
 
   - at_s: 74.4
     id: civilian-conflict-context
-    subject: cuas.operational.context
+    subject: cuas.operational.context.core
     c2_context_phase: safety_abort_pending_execution_evidence
     flight_id: AFR762
     policy: BOD-RWY-FRATRICIDE-003

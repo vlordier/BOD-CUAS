@@ -9,12 +9,69 @@ from __future__ import annotations
 import json
 import os
 import socket
+import sys
 import time
 from pathlib import Path
 from urllib.parse import urlparse
 
 NATS_URL = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
 SPEED = float(os.environ.get("DEMO_SPEED", "1.0"))
+if SPEED <= 0:
+    raise ValueError("DEMO_SPEED must be greater than zero")
+# Acceptance/capture jobs need an unattended deterministic path. A presenter
+# runs with DEMO_AUTORIZE_FALLBACK=0 so a visible operator action is required.
+AUTHORIZE_FALLBACK = os.environ.get("DEMO_AUTORIZE_FALLBACK", "1") == "1"
+
+
+def load_replay_profile() -> dict:
+    """Load and validate the scenario's operator-facing metadata profile."""
+    default_path = Path(__file__).with_name("replay-profile.json")
+    path = Path(os.environ.get("DEMO_REPLAY_PROFILE", str(default_path)))
+    try:
+        profile = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"invalid replay profile {path}: {error}") from error
+    if profile.get("schema") != "bod-cuas.replay-profile":
+        raise ValueError("replay profile schema must be bod-cuas.replay-profile")
+    pack_ref = profile.get("airport_pack_manifest")
+    if pack_ref is not None:
+        if not isinstance(pack_ref, str) or not pack_ref.strip():
+            raise ValueError("airport_pack_manifest must be a non-empty relative path")
+        pack_path = (path.parent / pack_ref).resolve()
+        try:
+            pack = json.loads(pack_path.read_text(encoding="utf-8"))
+            identity_ref = pack["components"]["identity"]
+            identity_path = (pack_path.parent / identity_ref).resolve()
+            identity = json.loads(identity_path.read_text(encoding="utf-8"))
+        except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+            raise ValueError(f"invalid airport pack referenced by {path}: {error}") from error
+        if pack.get("schema") != "bod-cuas.airport-pack":
+            raise ValueError("airport pack schema must be bod-cuas.airport-pack")
+        if identity.get("schema") != "bod-cuas.airport-pack.identity":
+            raise ValueError("airport pack identity schema is invalid")
+        profile_airport = profile.get("airport")
+        profile_icao = profile_airport.get("icao") if isinstance(profile_airport, dict) else None
+        if identity.get("icao", "").upper() != str(profile_icao).upper():
+            raise ValueError("replay profile airport ICAO does not match its airport-pack identity")
+    airport = profile.get("airport")
+    required_strings = ("scenario_id", "protected_volume_id", "civil_flight_id", "safety_policy_id")
+    if not isinstance(airport, dict) or any(not isinstance(airport.get(key), str) for key in ("icao", "name", "active_runway", "affected_sector")):
+        raise ValueError("replay profile airport must define icao, name, active_runway and affected_sector")
+    if any(not isinstance(profile.get(key), str) or not profile[key].strip() for key in required_strings):
+        raise ValueError("replay profile identifiers must be non-empty strings")
+    return profile
+
+
+REPLAY_PROFILE = load_replay_profile()
+PROFILE_AIRPORT = REPLAY_PROFILE["airport"]
+SCENARIO_ID = os.environ.get("DEMO_SCENARIO_ID", REPLAY_PROFILE["scenario_id"])
+AIRPORT_ICAO = os.environ.get("DEMO_AIRPORT_ICAO", PROFILE_AIRPORT["icao"]).strip().upper()
+AIRPORT_NAME = os.environ.get("DEMO_AIRPORT_NAME", PROFILE_AIRPORT["name"])
+ACTIVE_RUNWAY = os.environ.get("DEMO_ACTIVE_RUNWAY", PROFILE_AIRPORT["active_runway"])
+DEFAULT_AFFECTED_SECTOR = os.environ.get("DEMO_AFFECTED_SECTOR", PROFILE_AIRPORT["affected_sector"])
+PROTECTED_VOLUME_ID = os.environ.get("DEMO_PROTECTED_VOLUME_ID", REPLAY_PROFILE["protected_volume_id"])
+CIVIL_FLIGHT_ID = os.environ.get("DEMO_CIVIL_FLIGHT_ID", REPLAY_PROFILE["civil_flight_id"])
+SAFETY_POLICY_ID = os.environ.get("DEMO_SAFETY_POLICY", REPLAY_PROFILE["safety_policy_id"])
 
 # Subjects
 OBSERVATION_SUBJECT = "surveillance.observation"
@@ -25,7 +82,18 @@ SAFETY_CIVILIAN_CONFLICT_SUBJECT = "safety.civilian_aircraft_conflict"
 # Additive, C2-only read model. Core does not consume this subject; it exists so
 # the demo can render an honest operational picture without decorating or
 # weakening the versioned Core input contracts above.
-OPERATIONAL_CONTEXT_SUBJECT = "cuas.operational.context"
+OPERATIONAL_CONTEXT_SUBJECT = "cuas.operational.context.core"
+
+
+def airport_context(affected_sector: str | None = None) -> dict:
+    """Build the operator-facing airport context from deployment settings."""
+    return {
+        "icao": AIRPORT_ICAO,
+        "name": AIRPORT_NAME,
+        "active_runway": ACTIVE_RUNWAY,
+        "affected_sector": affected_sector,
+        "mode": "training_replay",
+    }
 
 
 def publish(sock: socket.socket, subject: str, payload: dict) -> None:
@@ -126,7 +194,17 @@ def main() -> None:
             This intentionally does not add fields to Core-owned stimuli.
             """
             def _inject(p: dict) -> None:
+                # The operator profile retains its display name; the strict
+                # Core transport contract intentionally carries only the
+                # neutral airport reference fields.
+                if isinstance(p.get("airport"), dict):
+                    p["airport"].pop("name", None)
+                p["producer"] = "bod-cuas.replay"
+                p["provenance"] = "synthetic_replay"
                 p["occurred_at_ms"] = int(time.time() * 1000)
+                threat = p.get("threat")
+                if isinstance(threat, dict):
+                    threat.setdefault("position", {"x": 448500000, "y": 50000, "z": -7000000})
             emit(at_s, OPERATIONAL_CONTEXT_SUBJECT, payload, inject=_inject)
 
         def emit_obs(at_s: float, subject: str, **obs_kw) -> None:
@@ -141,22 +219,18 @@ def main() -> None:
 
         # 0 s: scenario start
         emit(0.0, SCENARIO_STATUS_SUBJECT, {
-            "id": "bod-cuas-golden", "state": "running", "tick": 0, "elapsed_sec": 0,
+            "id": SCENARIO_ID, "state": "running", "tick": 0, "elapsed_sec": 0,
         })
         emit_operational_context(0.1, {
             "schema": "furia.cuas.operational-context",
-            "version": "1.0.0",
-            "scenario_id": "bod-cuas-golden",
-            "phase": "surveillance",
+            "version": "2.0.0",
             "airport": {
-                "icao": "LFBD", "name": "Bordeaux-Merignac",
-                "active_runway": "05/23", "affected_sector": None,
-                "mode": "training_replay",
+                **airport_context(None),
             },
             "threat": {
                 "track_id": "4660", "classification": "pending_detection",
                 "cooperative": None, "authorization": "unknown",
-                "confidence_permille": 0, "source_summary": [],
+                "confidence_permille": 0, "source_summary": ["synthetic-replay"],
                 "data_freshness_ms": 0, "predicted_entry": None,
             },
             "authority": {
@@ -255,13 +329,8 @@ def main() -> None:
             "frequency_mhz": None,
         })
         emit_operational_context(30.1, {
-            "schema": "furia.cuas.operational-context", "version": "1.0.0",
-            "scenario_id": "bod-cuas-golden", "phase": "assessment",
-            "airport": {
-                "icao": "LFBD", "name": "Bordeaux-Merignac",
-                "active_runway": "05/23", "affected_sector": "RWY23 approach",
-                "mode": "training_replay",
-            },
+            "schema": "furia.cuas.operational-context", "version": "2.0.0",
+            "airport": airport_context(DEFAULT_AFFECTED_SECTOR),
             "threat": {
                 "track_id": "4660", "classification": "non_cooperative_uas",
                 "cooperative": False, "authorization": "unknown",
@@ -269,7 +338,7 @@ def main() -> None:
                 "source_summary": ["radar-low-altitude", "eo-ir", "rf-tdoa", "acoustic-array-01"],
                 "data_freshness_ms": 350,
                 "predicted_entry": {
-                    "volume_id": "approach-rwy23", "runway_or_sector": "RWY23",
+                    "volume_id": PROTECTED_VOLUME_ID, "runway_or_sector": DEFAULT_AFFECTED_SECTOR,
                     "time_to_entry_ms": 37000, "horizontal_uncertainty_mm": 2000,
                 },
             },
@@ -280,7 +349,7 @@ def main() -> None:
                 "execution_acknowledgement": "not_applicable",
             },
             "safety": {
-                "state": "elevated", "policy": None, "civil_flight": None,
+                "state": "assessment", "policy": None, "civil_flight": None,
                 "operator_action": "operator_decision_required",
             },
         })
@@ -298,35 +367,36 @@ def main() -> None:
         # message is a no-op duplicate. If they don't, this fallback triggers delegation.
         # If the operator clicks "Deny", the C2 publishes authorized:false and the
         # scenario shows a different outcome (no delegation, no lost link, no abort).
-        emit(44.5, OPERATOR_AUTHORIZED_SUBJECT, {
-            "action": "intercept", "track_id": "4660",
-            "operator": "demo-operator",
-            "authorization_id": "bod-demo-auth-4660",
-            "authorized": True,
-        })
+        if AUTHORIZE_FALLBACK:
+            emit(44.5, OPERATOR_AUTHORIZED_SUBJECT, {
+                "action": "intercept", "track_id": "4660",
+                "operator": "demo-operator",
+                "authorization_id": "bod-demo-auth-4660",
+                "authorized": True,
+            })
+        else:
+            emit(44.5, "operator.timeline", {
+                "event": "operator_authorisation_required", "track_id": "4660",
+                "severity": "attention", "mode": "manual_demo",
+            })
         emit_operational_context(44.6, {
-            "schema": "furia.cuas.operational-context", "version": "1.0.0",
-            "scenario_id": "bod-cuas-golden", "phase": "bounded_execution",
-            "airport": {
-                "icao": "LFBD", "name": "Bordeaux-Merignac",
-                "active_runway": "05/23", "affected_sector": "RWY23 approach",
-                "mode": "training_replay",
-            },
+            "schema": "furia.cuas.operational-context", "version": "2.0.0",
+            "airport": airport_context(DEFAULT_AFFECTED_SECTOR),
             "threat": {
                 "track_id": "4660", "classification": "non_cooperative_uas",
                 "cooperative": False, "authorization": "unknown",
                 "confidence_permille": 880,
                 "source_summary": ["radar-low-altitude", "eo-ir", "rf-tdoa"],
                 "data_freshness_ms": 120, "predicted_entry": {
-                    "volume_id": "approach-rwy23", "runway_or_sector": "RWY23",
+                    "volume_id": PROTECTED_VOLUME_ID, "runway_or_sector": DEFAULT_AFFECTED_SECTOR,
                     "time_to_entry_ms": 22500, "horizontal_uncertainty_mm": 2000,
                 },
             },
             "authority": {
-                "posture": "bounded_intercept", "scope": "track:4660 / shadow-intercept only",
+                "posture": "authorization_pending", "scope": "track:4660 / shadow-intercept only",
                 "authority_source": "exercise-authority", "valid_for_sec": 270,
                 "constraints": ["no_effect_authority", "civilian_conflict_inhibits_execution"],
-                "execution_acknowledgement": "delegation_pending",
+                "execution_acknowledgement": "pending_human_authority",
             },
             "safety": {"state": "elevated", "policy": None, "civil_flight": None,
                        "operator_action": "none"},
@@ -344,14 +414,12 @@ def main() -> None:
             "authority_valid": True,
         })
         emit_operational_context(54.6, {
-            "schema": "furia.cuas.operational-context", "version": "1.0.0",
-            "scenario_id": "bod-cuas-golden", "phase": "bounded_continuation",
-            "airport": {"icao": "LFBD", "name": "Bordeaux-Merignac", "active_runway": "05/23",
-                        "affected_sector": "RWY23 approach", "mode": "training_replay"},
+            "schema": "furia.cuas.operational-context", "version": "2.0.0",
+            "airport": airport_context(DEFAULT_AFFECTED_SECTOR),
             "threat": {"track_id": "4660", "classification": "non_cooperative_uas",
                        "cooperative": False, "authorization": "unknown", "confidence_permille": 840,
                        "source_summary": ["eo-ir", "rf-tdoa"], "data_freshness_ms": 900,
-                       "predicted_entry": {"volume_id": "approach-rwy23", "runway_or_sector": "RWY23",
+                       "predicted_entry": {"volume_id": PROTECTED_VOLUME_ID, "runway_or_sector": DEFAULT_AFFECTED_SECTOR,
                                            "time_to_entry_ms": 14000, "horizontal_uncertainty_mm": 3500}},
             "authority": {"posture": "bounded_continuation", "scope": "track:4660 / shadow-intercept only",
                           "authority_source": "exercise-authority", "valid_for_sec": 240,
@@ -371,38 +439,40 @@ def main() -> None:
 
         # 74.5 s: civilian aircraft conflict
         emit_operational_context(74.4, {
-            "schema": "furia.cuas.operational-context", "version": "1.0.0",
-            "scenario_id": "bod-cuas-golden", "phase": "safety_abort_pending_execution_evidence",
-            "airport": {"icao": "LFBD", "name": "Bordeaux-Merignac", "active_runway": "05/23",
-                        "affected_sector": "RWY23 approach", "mode": "training_replay"},
+            "schema": "furia.cuas.operational-context", "version": "2.0.0",
+            "airport": airport_context(DEFAULT_AFFECTED_SECTOR),
             "threat": {"track_id": "4660", "classification": "non_cooperative_uas",
                        "cooperative": False, "authorization": "unknown", "confidence_permille": 860,
                        "source_summary": ["radar-low-altitude", "eo-ir", "rf-tdoa"], "data_freshness_ms": 350,
-                       "predicted_entry": {"volume_id": "approach-rwy23", "runway_or_sector": "RWY23",
+                       "predicted_entry": {"volume_id": PROTECTED_VOLUME_ID, "runway_or_sector": DEFAULT_AFFECTED_SECTOR,
                                            "time_to_entry_ms": 4800, "horizontal_uncertainty_mm": 2500}},
             "authority": {"posture": "intercept_inhibited", "scope": "track:4660 / shadow-intercept only",
                           "authority_source": "exercise-authority", "valid_for_sec": 220,
                           "constraints": ["no_effect_authority", "civilian_conflict_inhibits_execution"],
                           "execution_acknowledgement": "pending_safe_hold_evidence"},
-            "safety": {"state": "abort_issued", "policy": "BOD-RWY-FRATRICIDE-003",
-                       "civil_flight": {"callsign": "AFR762", "phase": "arrival",
-                                        "affected_sector": "RWY23 approach"},
+            "safety": {"state": "abort_issued", "policy": SAFETY_POLICY_ID,
+                       "civil_flight": {"callsign": CIVIL_FLIGHT_ID, "phase": "arrival",
+                                        "affected_sector": DEFAULT_AFFECTED_SECTOR},
                        "operator_action": "none_wait_for_safe_hold_evidence"},
         })
         emit(74.5, SAFETY_CIVILIAN_CONFLICT_SUBJECT, {
             "mission_id": "perimeter_defense_fob",
-            "flight_id": "AFR762",
+            "flight_id": CIVIL_FLIGHT_ID,
             "track_id": "4660",
-            "policy": "BOD-RWY-FRATRICIDE-003",
+            "policy": SAFETY_POLICY_ID,
         })
 
         # 94.5 s: scenario complete
         emit(94.5, SCENARIO_STATUS_SUBJECT, {
-            "id": "bod-cuas-golden", "state": "complete", "tick": 94, "elapsed_sec": 94,
+            "id": SCENARIO_ID, "state": "complete", "tick": 94, "elapsed_sec": 94,
         })
 
         print("\n=== Replay complete ===", flush=True)
 
 
 if __name__ == "__main__":
+    if "--validate-profile" in sys.argv:
+        profile_path = Path(os.environ.get("DEMO_REPLAY_PROFILE", str(Path(__file__).with_name("replay-profile.json"))))
+        print(f"replay profile valid: {profile_path.resolve()}")
+        raise SystemExit(0)
     main()

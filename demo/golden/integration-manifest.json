@@ -2,7 +2,7 @@
   "schema": "furia.golden.integration-manifest",
   "version": "1.0.0",
   "scenario_id": "bod-cuas-golden",
-  "description": "Cross-repository source selection for the Bordeaux golden demo. Development refs keep local and branch CI usable; replace pinned_ref with an immutable 40-character Git SHA after the participating changes are committed.",
+  "description": "Cross-repository runtime source selection for the Bordeaux golden demo. Development refs keep local and branch CI usable; replace pinned_ref with an immutable 40-character Git SHA after the participating changes are committed. Geospatial planning is documented separately because it is an offline export producer, not a runtime dependency.",
   "repositories": [
     {
       "id": "furia_core",

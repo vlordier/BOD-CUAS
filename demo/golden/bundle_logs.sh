@@ -16,6 +16,14 @@ if [[ -d "$LOG_DIR" ]]; then
   cp -r "$LOG_DIR/" "$BUNDLE_PATH/logs/"
 fi
 
+cat > "$BUNDLE_PATH/runtime.env" <<EOF
+NATS_URL=${NATS_URL:-}
+VITE_NATS_WS_URL=${VITE_NATS_WS_URL:-}
+DEMO_ATAK_MODE=${DEMO_ATAK_MODE:-auto}
+DEMO_SKIP_ATAK=${DEMO_SKIP_ATAK:-0}
+DEMO_CONTEXT_SIMULATORS=${DEMO_CONTEXT_SIMULATORS:-1}
+EOF
+
 # Generate acceptance report
 python3 "$(dirname "$0")/acceptance_report.py" > "$BUNDLE_PATH/acceptance.json" 2>&1 || true
 

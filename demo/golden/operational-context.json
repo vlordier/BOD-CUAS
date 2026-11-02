@@ -1,7 +1,7 @@
 {
   "schema": "furia.cuas.operational-context",
-  "version": "1.0.0",
-  "subject": "cuas.operational.context",
+  "version": "2.0.0",
+  "subject": "cuas.operational.context.core",
   "purpose": "Additive C2 read model for the deterministic Bordeaux golden demo. This is not an authoritative command, surveillance observation, or safety decision input.",
   "required": [
     "schema",
@@ -16,7 +16,7 @@
   ],
   "example": {
     "schema": "furia.cuas.operational-context",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "scenario_id": "bod-cuas-golden",
     "occurred_at_ms": 1735689600000,
     "phase": "safety_abort_pending_execution_evidence",

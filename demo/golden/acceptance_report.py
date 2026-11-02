@@ -29,6 +29,11 @@ def main() -> int:
         "result": "PASS",
         "scenario": "bod-cuas-golden",
         "checks": {},
+        "runtime": {
+            "nats_url": os.environ.get("NATS_URL", ""),
+            "nats_ws_url": os.environ.get("VITE_NATS_WS_URL", ""),
+            "atak_mode": os.environ.get("DEMO_ATAK_MODE", "auto"),
+        },
     }
 
     all_pass = True

@@ -6,8 +6,20 @@ ROOT="${FURIA_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 CORE="$ROOT/furia-core"
 C2="$ROOT/furia-c2"
 S1="$ROOT/S1"
-LOG_DIR="${TMPDIR:-/tmp}/furia-bod-golden"
+# Keep logs reproducible in CI or a shared rehearsal host without requiring
+# edits to the runner. The default remains an isolated temporary directory.
+LOG_DIR="${DEMO_LOG_DIR:-${TMPDIR:-/tmp}/furia-bod-golden}"
 mkdir -p "$LOG_DIR"
+source "$SCRIPT_DIR/runtime-config.sh"
+load_demo_runtime_config
+validate_demo_runtime_config
+
+NATS_MODE="${DEMO_NATS_MODE:-auto}"
+if [[ "$NATS_MODE" == "external" || "$NATS_MODE" == "headless" ]]; then
+  echo "ERROR: run.sh owns a local NATS broker and requires DEMO_NATS_MODE=local (or auto)." >&2
+  echo "       Use doctor.sh for external/headless diagnostics, or provide a local broker for the full UI run." >&2
+  exit 2
+fi
 
 ALL_PIDS=()
 ALL_CONTAINERS=()
@@ -56,7 +68,12 @@ wait_log() {
 }
 
 if [[ "${1:-}" == "--doctor" ]]; then exec bash "$SCRIPT_DIR/doctor.sh"; fi
-bash "$SCRIPT_DIR/doctor.sh"
+DEMO_NATS_TCP_PORT="$NATS_TCP_PORT" DEMO_NATS_WS_PORT="$NATS_WS_PORT" \
+  DEMO_SAPIENT_ADAPTER_PORT="$SAPIENT_ADAPTER_PORT" \
+  DEMO_CORE_PORT="$CORE_PORT" DEMO_S1_PORT="$S1_PORT" DEMO_C2_PORT="$C2_PORT" DEMO_ATAK_PORT="$ATAK_PORT" \
+  DEMO_SAPIENT_PATH="$SAPIENT_PATH" DEMO_CUAS_PROJECTION_MODE="$CUAS_PROJECTION_MODE" \
+  NATS_URL="$NATS_URL" VITE_NATS_WS_URL="$VITE_NATS_WS_URL" \
+  bash "$SCRIPT_DIR/doctor.sh"
 echo
 
 echo '=== Start NATS JetStream (TCP + WebSocket) ==='
@@ -67,23 +84,57 @@ if command -v nats-server >/dev/null 2>&1; then
   nats-server -c "$NATS_STATE_DIR/nats.conf" >"$LOG_DIR/nats.log" 2>&1 & ALL_PIDS+=("$!")
 else
   name="furia-bod-nats-$$"
-  docker run --rm --name "$name" -p 4222:4222 -p 9222:9222 \
-    nats:2.10-alpine -js -m 8222 --websocket_port 9222 \
+  docker run --rm --name "$name" -p "$NATS_TCP_PORT:4222" -p "$NATS_WS_PORT:9222" \
+    nats:2.10-alpine -js --websocket_port 9222 \
     >"$LOG_DIR/nats.log" 2>&1 &
   ALL_PIDS+=("$!"); ALL_CONTAINERS+=("$name")
 fi
-wait_tcp 4222 'NATS TCP'
-wait_tcp 9222 'NATS WebSocket'
-export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
+wait_tcp "$NATS_TCP_PORT" 'NATS TCP'
+wait_tcp "$NATS_WS_PORT" 'NATS WebSocket'
+export NATS_URL="${NATS_URL:-nats://127.0.0.1:$NATS_TCP_PORT}"
 export FURIA_NATS_URL="$NATS_URL"
+# The browser adapter uses an explicit WebSocket endpoint. Keep it
+# configurable for remote/rehearsal deployments while preserving the local
+# default used by the deterministic demo.
+export VITE_NATS_WS_URL="${VITE_NATS_WS_URL:-ws://127.0.0.1:$NATS_WS_PORT}"
 export UXV_CONFIG_DIR="${UXV_CONFIG_DIR:-$SCRIPT_DIR/../../config}"
+
+# Projection ownership is explicit. The external mode is the canonical
+# synthetic demo path; compatibility remains available for migration tests.
+echo "  Canonical operational projection owner: $CUAS_PROJECTION_MODE"
+
+echo "  SAPIENT path: $SAPIENT_PATH"
+
+ATAK_MODE="${DEMO_ATAK_MODE:-auto}"
+if [[ "${DEMO_SKIP_ATAK:-0}" == "1" ]]; then ATAK_MODE="skip"; fi
+if [[ "$ATAK_MODE" == "auto" ]] && command -v lsof >/dev/null 2>&1 && lsof -i :"$ATAK_PORT" 2>/dev/null | grep -q LISTEN; then
+  echo '  ATAK development server auto-disabled because :8080 is occupied'
+  ATAK_MODE="skip"
+fi
+if [[ "$ATAK_MODE" != "auto" && "$ATAK_MODE" != "required" && "$ATAK_MODE" != "skip" ]]; then
+  echo "ERROR: DEMO_ATAK_MODE must be auto, required, or skip (got $ATAK_MODE)"
+  exit 1
+fi
 
 echo '=== Build services ==='
 if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
-  (
-    cd "$CORE"
-    cargo build --release -p furia-core-server -p dev-atak-server -p counter-uas-director -p sapient-simulator 2>&1 | tail -5
-  )
+  if [[ "$SAPIENT_PATH" == "protobuf-adapter" ]]; then
+    (
+      cd "$CORE"
+      cargo build --release -p furia-core-server -p dev-atak-server -p sapient-simulator -p sapient-adapter 2>&1 | tail -5
+    )
+  else
+    (
+      cd "$CORE"
+      cargo build --release -p furia-core-server -p dev-atak-server -p sapient-simulator 2>&1 | tail -5
+    )
+  fi
+  if [[ "$CUAS_PROJECTION_MODE" == "furia-cuas" ]]; then
+    (
+      cd "$ROOT/furia-cuas"
+      cargo build --release -p furia-cuas-simulator --bin furia-cuas-publisher 2>&1 | tail -5
+    )
+  fi
   (
     cd "$S1"
     cargo build --release -p s1-sim-server --bins 2>&1 | tail -5
@@ -93,20 +144,47 @@ else
   echo '  SKIP_BUILD=1 — using existing binaries'
 fi
 
-echo '=== Start Core C-UAS services ==='
-NATS_URL="$NATS_URL" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & ALL_PIDS+=("$!")
-NATS_URL="$NATS_URL" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.log" 2>&1 & ALL_PIDS+=("$!")
-NATS_URL="$NATS_URL" UXV_CONFIG_DIR="$UXV_CONFIG_DIR" RUST_LOG=debug "$CORE/target/release/counter-uas-director" >"$LOG_DIR/cuas.log" 2>&1 & ALL_PIDS+=("$!")
-wait_http http://127.0.0.1:8080/health 'ATAK dev server'
-wait_http http://127.0.0.1:3000/health 'Furia Core'
-wait_log "$LOG_DIR/cuas.log" 'C-UAS Director started' 'C-UAS director (NATS-only)' 15
+if [[ "$CUAS_PROJECTION_MODE" == "furia-cuas" ]]; then
+  PUBLISHER_BIN="${FURIA_CUAS_PUBLISHER_BIN:-$ROOT/furia-cuas/target/release/furia-cuas-publisher}"
+  [[ -x "$PUBLISHER_BIN" ]] || { echo "ERROR: canonical publisher missing: $PUBLISHER_BIN" >&2; exit 1; }
+  echo '=== Start canonical furia-cuas projection publisher ==='
+  nats --server "$NATS_URL" sub furia.cuas.operational-projection --count=1 --timeout=15s >"$LOG_DIR/canonical-projection.jsonl" 2>&1 & ALL_PIDS+=("$!")
+  if [[ "$SAPIENT_PATH" == "protobuf-adapter" ]]; then
+    NATS_URL="$NATS_URL" "$PUBLISHER_BIN" --nats-url "$NATS_URL" --from-sapient \
+      >"$LOG_DIR/furia-cuas-publisher.log" 2>&1 & ALL_PIDS+=("$!")
+    echo '  Projection source: normalized SAPIENT adapter handoff'
+  else
+    NATS_URL="$NATS_URL" "$PUBLISHER_BIN" --nats-url "$NATS_URL" --simulate \
+      --ticks "${DEMO_CUAS_PUBLISHER_TICKS:-3600}" \
+      --interval-ms "${DEMO_CUAS_PUBLISHER_INTERVAL_MS:-1000}" \
+      >"$LOG_DIR/furia-cuas-publisher.log" 2>&1 & ALL_PIDS+=("$!")
+    wait_log "$LOG_DIR/canonical-projection.jsonl" 'furia.cuas.operational-projection' 'canonical furia-cuas projection' 15
+    echo '  Projection provenance: furia-cuas-publisher synthetic replay'
+  fi
+fi
+
+echo '=== Start Core services ==='
+if [[ "$ATAK_MODE" != "skip" ]]; then
+  NATS_URL="$NATS_URL" ATAK_PORT="$ATAK_PORT" "$CORE/target/release/dev-atak-server" >"$LOG_DIR/dev-atak.log" 2>&1 & ALL_PIDS+=("$!")
+else
+  echo '  ATAK development server skipped (C2 replay does not require it)'
+fi
+NATS_URL="$NATS_URL" FURIA_PORT="$CORE_PORT" "$CORE/target/release/furia-core-server" >"$LOG_DIR/core.log" 2>&1 & ALL_PIDS+=("$!")
+if [[ "$ATAK_MODE" != "skip" ]]; then wait_http "http://127.0.0.1:$ATAK_PORT/health" 'ATAK dev server'; fi
+wait_http "http://127.0.0.1:$CORE_PORT/health" 'Furia Core'
+
+if [[ "$SAPIENT_PATH" == "protobuf-adapter" ]]; then
+  echo '=== Start real SAPIENT Protobuf adapter ==='
+  NATS_URL="$NATS_URL" SAPIENT_ADAPTER_PORT="$SAPIENT_ADAPTER_PORT" "$CORE/target/release/sapient-adapter" >"$LOG_DIR/sapient-adapter.log" 2>&1 & ALL_PIDS+=("$!")
+  wait_http "http://127.0.0.1:$SAPIENT_ADAPTER_PORT/health" 'SAPIENT Protobuf adapter'
+fi
 
 echo '=== Start S1 simulation service ==='
 (
   cd "$S1"
-  exec ./target/release/s1-sim-server --nats-url "$NATS_URL" --port 3227
+  exec ./target/release/s1-sim-server --nats-url "$NATS_URL" --port "$S1_PORT"
 ) >"$LOG_DIR/s1.log" 2>&1 & ALL_PIDS+=("$!")
-wait_http http://127.0.0.1:3227/api/v1/scenarios 'S1 Sim Server' 90
+wait_http "http://127.0.0.1:$S1_PORT/api/v1/scenarios" 'S1 Sim Server' 90
 
 echo '=== Start C-UAS health injector ==='
 "$S1/target/release/cuas-health-injector" --nats-url "$NATS_URL" >"$LOG_DIR/s1-health.log" 2>&1 & ALL_PIDS+=("$!")
@@ -114,15 +192,29 @@ wait_log "$LOG_DIR/s1-health.log" 'cuas-health-injector: subscribed to' 'C-UAS h
 wait_log "$LOG_DIR/s1-health.log" 'subscribed to swarm.command.abort' 'C-UAS abort evidence bridge' 15
 
 echo '=== Start SAPIENT simulator ==='
-NATS_URL="$NATS_URL" "$CORE/target/release/sapient-simulator" --target-lat=44.8283 --target-lon=-0.7156 >"$LOG_DIR/sapient.log" 2>&1 & ALL_PIDS+=("$!")
+if [[ "$SAPIENT_PATH" == "protobuf-adapter" ]]; then
+  NATS_URL="$NATS_URL" "$CORE/target/release/sapient-simulator" \
+    --adapter-url "http://127.0.0.1:$SAPIENT_ADAPTER_PORT" --target-lat=44.8283 --target-lon=-0.7156 \
+    >"$LOG_DIR/sapient.log" 2>&1 & ALL_PIDS+=("$!")
+  wait_log "$LOG_DIR/canonical-projection.jsonl" 'furia.cuas.operational-projection' 'SAPIENT → furia-cuas canonical projection' 20
+else
+  NATS_URL="$NATS_URL" "$CORE/target/release/sapient-simulator" --target-lat=44.8283 --target-lon=-0.7156 >"$LOG_DIR/sapient.log" 2>&1 & ALL_PIDS+=("$!")
+fi
 
 echo '=== Start Furia C2 ==='
 (
   cd "$C2"
   # Dependencies already installed; skip pnpm install to avoid hanging
-  NATS_URL="$NATS_URL" exec npx vite --host 127.0.0.1 --port 4180 --strictPort
+  NATS_URL="$NATS_URL" VITE_NATS_WS_URL="$VITE_NATS_WS_URL" exec npx vite --host 127.0.0.1 --port "$C2_PORT" --strictPort
 ) >"$LOG_DIR/c2.log" 2>&1 & ALL_PIDS+=("$!")
-wait_http http://127.0.0.1:4180 'Furia C2' 90
+wait_http "http://127.0.0.1:$C2_PORT" 'Furia C2' 90
+
+if [[ "${DEMO_CONTEXT_SIMULATORS:-1}" == "1" ]]; then
+  echo '=== Start labelled 3D visual-world descriptor ==='
+  python3 "$ROOT/BOD-CUAS/demo/live-context/visual_world_simulator.py" --nats-url "$NATS_URL" >"$LOG_DIR/visual-world.log" 2>&1 & ALL_PIDS+=("$!")
+  echo '=== Start labelled EO/IR metadata simulator ==='
+  python3 "$ROOT/BOD-CUAS/demo/live-context/eo_ir_simulator.py" --nats-url "$NATS_URL" >"$LOG_DIR/eo-ir.log" 2>&1 & ALL_PIDS+=("$!")
+fi
 
 echo '=== Start verifiers ==='
 VERIFIER_PIDS=""
@@ -133,18 +225,21 @@ echo '  Verifiers started'
 sleep 2  # Allow subscriptions to establish before replay starts
 
 echo '=== Start deterministic replay ==='
-DEMO_SPEED=1 NATS_URL="$NATS_URL" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 & ALL_PIDS+=("$!")
+# CI/capture preserves a deterministic fallback. For a real operator-led
+# presentation use DEMO_AUTORIZE_FALLBACK=0 and authorize in the visible C2.
+DEMO_SPEED="${DEMO_SPEED:-1}" DEMO_AUTORIZE_FALLBACK="${DEMO_AUTORIZE_FALLBACK:-1}" NATS_URL="$NATS_URL" python3 "$SCRIPT_DIR/replay.py" >"$LOG_DIR/replay.log" 2>&1 & ALL_PIDS+=("$!")
 
 cat <<BODEOF
 
 ============================================
   FURIA BORDEAUX GOLDEN DEMO RUNNING
 ============================================
-  NATS TCP:   127.0.0.1:4222
-  NATS WS:    ws://127.0.0.1:9222
-  Core:       http://127.0.0.1:3000
-  C2:         http://127.0.0.1:4180
-  S1:         http://127.0.0.1:3227
+  NATS TCP:   $NATS_URL
+  NATS WS:    $VITE_NATS_WS_URL
+  SAPIENT adapter: 127.0.0.1:$SAPIENT_ADAPTER_PORT
+  Core:       http://127.0.0.1:$CORE_PORT
+  C2:         http://127.0.0.1:$C2_PORT
+  S1:         http://127.0.0.1:$S1_PORT
   Logs:       $LOG_DIR
 ============================================
 

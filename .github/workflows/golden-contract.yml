@@ -85,6 +85,24 @@ jobs:
             demo/golden/test_abort_correlation.py \
             demo/golden/test_integration_manifest.py
 
+      - name: Validate resilience simulation pack
+        run: |
+          cd BOD-CUAS
+          make resilience-check
+
+      - name: Install furia-ui dependencies
+        run: |
+          cd furia-ui/packages/ui
+          CI=true pnpm install --frozen-lockfile
+
+      - name: Validate furia-ui package
+        run: |
+          cd furia-ui/packages/ui
+          pnpm lint:ci
+          pnpm typecheck
+          pnpm test:contracts
+          pnpm verify:package
+
       - name: Build furia-core binaries
         run: |
           cd furia-core
@@ -98,7 +116,7 @@ jobs:
       - name: Install C2 dependencies
         run: |
           cd furia-c2
-          pnpm install
+          CI=true pnpm install --frozen-lockfile
 
       - name: Run golden demo
         run: |
