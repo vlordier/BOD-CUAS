@@ -1,0 +1,27 @@
+{
+  "schema": "furia.core.geospatial.context",
+  "version": "1.0.0",
+  "airport_id": "LFBD",
+  "generated_at_ms": 1786276800000,
+  "provenance": {
+    "terrain_source": "bordeaux-mnt-2023:terrain-grid-mnt2023.json",
+    "buildings_source": "osm-buildings:buildings.geojson",
+    "horizontal_crs": "WGS84 geographic / local ENU projection",
+    "vertical_datum": "source vertical reference; not independently certified",
+    "geometry_epoch": "2023-terrain-and-current-context"
+  },
+  "rays": [
+    {
+      "ray_path": [[0.0, 0.0, 46.825], [10.0, 0.0, 46.851], [20.0, 0.0, 80.0]],
+      "obstacle_heights_m": [46.825, 46.851, 0.0],
+      "geometry_ids": ["terrain-cell-0", "terrain-cell-1", "target-track"],
+      "confidence": 0.82
+    },
+    {
+      "ray_path": [[0.0, 0.0, 46.825], [0.0, 10.0, 46.825], [0.0, 20.0, 100.0]],
+      "obstacle_heights_m": [46.825, 46.825, 0.0],
+      "geometry_ids": ["terrain-cell-0", "building-context-sample", "target-track"],
+      "confidence": 0.74
+    }
+  ]
+}

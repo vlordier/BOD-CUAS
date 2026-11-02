@@ -1,0 +1,9 @@
+{
+  "airport_icao": "LFBD",
+  "provenance": "training_simulation_until_replaced_by_reviewed_sia_import",
+  "airac_cycle": "replace-with-downloaded-cycle",
+  "effective_from": "replace-with-effective-date",
+  "source_url": "https://www.sia.aviation-civile.gouv.fr/produits-numeriques-en-libre-disposition/les-bases-de-donnees-sia.html",
+  "license": "SIA Open Licence / applicable product terms",
+  "geojson_path": "../golden/lfbd-demo-geodata.json"
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "furia.cuas.source-catalog",
+  "version": "1.0.0",
+  "airport_icao": "LFBD",
+  "policy": "Every C2-visible source must declare provenance, freshness and authority boundary. No source in this catalogue creates operational authority.",
+  "sources": [
+    {"id":"base-map","claim":"Map imagery and terrain","state":"real_adapter","provider":"IGN Geoplateforme integration","subject":"map.context","authority":"context_only"},
+    {"id":"aeronautical-static","claim":"Runways, procedures and published airspace","state":"real_adapter","provider":"SIA eAIP import","subject":"airport.static.context","authority":"context_only"},
+    {"id":"weather","claim":"METAR/TAF weather context","state":"real_adapter","provider":"Approved Météo-France endpoint","subject":"environment.weather.observation","authority":"context_only"},
+    {"id":"adsb-local","claim":"Cooperative crewed-aircraft observations","state":"real_adapter","provider":"Local 1090 MHz receiver","subject":"surveillance.observation","authority":"context_only"},
+    {"id":"adsb-opensky","claim":"Cached public cooperative-aircraft context","state":"real_adapter","provider":"OpenSky Network REST state vectors","subject":"surveillance.observation","authority":"context_only"},
+    {"id":"remote-id-local","claim":"Cooperative UAS broadcast observations","state":"real_adapter","provider":"Local ASTM F3411 receiver","subject":"surveillance.observation","authority":"context_only"},
+    {"id":"cuas-radar","claim":"Low-RCS target observations","state":"training_simulator","provider":"Bordeaux golden replay","subject":"surveillance.observation","authority":"training_only"},
+    {"id":"rf-geolocation","claim":"Bearings and controller estimate","state":"training_simulator","provider":"Bordeaux golden replay","subject":"surveillance.origin.*","authority":"training_only"},
+    {"id":"acoustic","claim":"Acoustic bearing corroboration","state":"training_simulator","provider":"Bordeaux golden replay","subject":"surveillance.origin.bearing","authority":"training_only"},
+    {"id":"eo-ir","claim":"Visual / thermal confirmation","state":"training_simulator","provider":"BOD EO/IR KLV metadata simulator","subject":"video.metadata","authority":"training_only"},
+    {"id":"airport-operations","claim":"AODB, runway state and airport acknowledgement","state":"requires_partner","provider":"Airport operator / DSNA","subject":"airport.operations.context","authority":"not_connected"},
+    {"id":"uspace","claim":"Network identification and flight authorisation","state":"requires_partner","provider":"Certified USSP / CISP","subject":"uspace.network-identification.context","authority":"not_connected"},
+    {"id":"s1-execution","claim":"Mission execution and safe-hold evidence","state":"training_simulator","provider":"S1 health injector","subject":"furia.s1.execution-evidence","authority":"training_only"}
+  ]
+}

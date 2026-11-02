@@ -1,0 +1,30 @@
+{
+  "sources": [
+    {
+      "id": "lfbd-local-adsb",
+      "kind": "adsb_jsonl",
+      "provider": "Local 1090 MHz receiver",
+      "c2_sensor_id": "ADSB",
+      "path": "samples/adsb.jsonl",
+      "sac": 250,
+      "sic": 1
+    },
+    {
+      "id": "lfbd-local-remote-id",
+      "kind": "remote_id_jsonl",
+      "provider": "Local ASTM F3411 receiver",
+      "c2_sensor_id": "RID",
+      "path": "samples/remote-id.jsonl",
+      "sac": 250,
+      "sic": 2
+    },
+    {
+      "id": "lfbd-public-metar",
+      "kind": "metar_http_json",
+      "provider": "NOAA Aviation Weather Center public API",
+      "airport_icao": "LFBD",
+      "url": "https://aviationweather.gov/api/data/metar?ids=LFBD&format=json",
+      "timeout_sec": 10
+    }
+  ]
+}

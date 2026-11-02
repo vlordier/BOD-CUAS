@@ -1,0 +1,31 @@
+{
+  "schema": "furia.cuas.hybrid-demo-scenario",
+  "version": "1.0.0",
+  "id": "lfbd-context-to-safe-hold",
+  "title": "LFBD context-to-safe-hold exercise",
+  "mode": "training_only",
+  "airport_icao": "LFBD",
+  "context_feeds": [
+    {"id": "aip", "kind": "official_static_context", "source": "SIA eAIP", "authority": "context_only"},
+    {"id": "traffic", "kind": "cached_public_adsb", "source": "OpenSky Network", "authority": "context_only"},
+    {"id": "weather", "kind": "cached_public_weather", "source": "AviationWeather.gov", "authority": "context_only"}
+  ],
+  "synthetic_feeds": ["cuas-radar", "rf-geolocation", "acoustic", "eo-ir", "airport-operations", "s1-execution"],
+  "stages": [
+    {"id": "normal", "label": "NORMAL CONTEXT", "at_sec": 0, "detail": "Real/cached LFBD context loaded; no response action available."},
+    {"id": "detect", "label": "DETECT", "at_sec": 35, "detail": "Synthetic low-RCS track appears outside the protected volume."},
+    {"id": "assess", "label": "ASSESS", "at_sec": 90, "detail": "RF and radar disagree; uncertainty envelope expands."},
+    {"id": "conflict", "label": "CIVIL CONFLICT", "at_sec": 150, "detail": "Synthetic AFR762 conflict drives a safety interlock."},
+    {"id": "degraded", "label": "DEGRADED SOURCES", "at_sec": 205, "detail": "EO/IR is weather-limited and one sensor becomes stale."},
+    {"id": "authority", "label": "BOUNDED AUTHORITY", "at_sec": 255, "detail": "Named human authority is recorded; no autonomous effect is created."},
+    {"id": "hold", "label": "SAFE HOLD", "at_sec": 315, "detail": "Core abort and correlated S1 training evidence are visible."},
+    {"id": "review", "label": "AFTER ACTION", "at_sec": 360, "detail": "Export provenance, timeline, interlock reason and limitations."}
+  ],
+  "counterfactuals": [
+    {"id": "no-civil-conflict", "label": "No civil conflict", "result": "intercept remains eligible for review"},
+    {"id": "radar-stale", "label": "Radar stale", "result": "confidence decreases and posture remains surveillance-only"},
+    {"id": "authority-expired", "label": "Authority expired", "result": "execution is inhibited and re-authorization is required"},
+    {"id": "runway-change", "label": "Runway state changes", "result": "affected sector and predicted conflict are recomputed"}
+  ],
+  "safety_boundary": "All authority, commands, effects and acknowledgements are simulated training artifacts. Public data is context only."
+}

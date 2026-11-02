@@ -1,0 +1,24 @@
+{
+  "schema": "furia.cuas.resilience-scenario",
+  "version": "1.0.0",
+  "id": "runway-state-change",
+  "title": "Runway state changes during assessment",
+  "purpose": "Exercise re-evaluation when airport operational context changes while a threat is approaching an active sector.",
+  "seed": 4105,
+  "duration_ms": 180000,
+  "actors": [
+    {"id": "uas-5201", "kind": "uas", "classification": "unknown_non_cooperative", "state": {"position": {"x_m": 1100, "y_m": 100, "z_m": 100}, "velocity": {"x_m": -20, "y_m": 0, "z_m": 0}, "uncertainty": {"x_m": 55, "y_m": 55, "z_m": 18}}},
+    {"id": "afr819", "kind": "civil_aircraft", "classification": "cooperative", "state": {"position": {"x_m": 3000, "y_m": 150, "z_m": 900}, "velocity": {"x_m": -50, "y_m": 0, "z_m": -4}, "uncertainty": {"x_m": 100, "y_m": 100, "z_m": 30}}}
+  ],
+  "sensors": [
+    {"id": "radar-01", "kind": "radar", "health": "nominal", "latency_ms": 100, "observes": ["uas-5201", "afr819"]},
+    {"id": "adsb-06", "kind": "ads_b", "health": "nominal", "latency_ms": 200, "observes": ["afr819"]},
+    {"id": "airport-ops-07", "kind": "airport_operations", "health": "nominal", "latency_ms": 1000, "observes": []}
+  ],
+  "faults": [
+    {"id": "fault-runway-change", "type": "runway_state_change", "target": "airport-ops-07", "start_ms": 50000, "duration_ms": 90000, "parameters": {"from_runway": "05/23", "to_runway": "11/29", "from_state": "active_arrival", "to_state": "active_departure", "affected_sector": "north_approach"}},
+    {"id": "fault-atc-delay", "type": "message_delay", "target": "network", "start_ms": 50000, "duration_ms": 60000, "parameters": {"additional_latency_ms": 20000, "subjects": ["airport.operations.context", "atc.acknowledgement"]}}
+  ],
+  "authority": {"id": "delegation-5201", "source": "airport_cuas_commander", "status": "bounded_pending", "scope": {"target_actor": "uas-5201", "effect": "shadow_only", "geographic_envelope": "lfbd-approach-sector"}, "valid_from_ms": 10000, "valid_until_ms": 160000, "constraints": ["recompute_on_runway_change", "inhibit_on_civil_conflict", "no_autonomous_defeat"]},
+  "expected_outcome": {"final_state": "safety_reassessment_after_runway_change", "assertions": ["The active runway and affected sector update as a distinct operational event.", "Threat risk is recomputed against the new runway state.", "ATC acknowledgement delay is visible and does not become an implicit clearance.", "Any previously bounded response remains constrained until the new conflict assessment completes."]}
+}

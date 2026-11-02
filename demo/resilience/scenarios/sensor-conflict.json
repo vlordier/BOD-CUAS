@@ -1,0 +1,27 @@
+{
+  "schema": "furia.cuas.resilience-scenario",
+  "version": "1.0.0",
+  "id": "sensor-conflict",
+  "title": "Conflicting sensor evidence",
+  "purpose": "Exercise honest uncertainty when radar, RF, acoustic, Remote-ID, and EO/IR evidence disagree near an active runway.",
+  "seed": 4101,
+  "duration_ms": 180000,
+  "actors": [
+    {"id": "uas-4660", "kind": "uas", "classification": "unknown_non_cooperative", "state": {"position": {"x_m": 1200, "y_m": -800, "z_m": 120}, "velocity": {"x_m": -18, "y_m": 7, "z_m": 0}, "uncertainty": {"x_m": 80, "y_m": 80, "z_m": 25}}},
+    {"id": "afr762", "kind": "civil_aircraft", "classification": "cooperative", "state": {"position": {"x_m": 2600, "y_m": 400, "z_m": 850}, "velocity": {"x_m": -42, "y_m": 0, "z_m": -3}, "uncertainty": {"x_m": 120, "y_m": 120, "z_m": 35}}}
+  ],
+  "sensors": [
+    {"id": "radar-01", "kind": "radar", "health": "nominal", "latency_ms": 100, "observes": ["uas-4660", "afr762"]},
+    {"id": "rf-02", "kind": "rf", "health": "nominal", "latency_ms": 350, "observes": ["uas-4660"]},
+    {"id": "acoustic-03", "kind": "acoustic", "health": "degraded", "latency_ms": 900, "observes": ["uas-4660"]},
+    {"id": "remote-id-04", "kind": "remote_id", "health": "nominal", "latency_ms": 150, "observes": ["uas-4660"]},
+    {"id": "eo-ir-05", "kind": "eo_ir", "health": "low_visibility", "latency_ms": 1200, "observes": ["uas-4660"]}
+  ],
+  "faults": [
+    {"id": "fault-rf-offset", "type": "disagreement", "target": "rf-02", "start_ms": 20000, "duration_ms": 90000, "parameters": {"bearing_error_deg": 14, "range_error_m": 300}},
+    {"id": "fault-acoustic-late", "type": "message_delay", "target": "acoustic-03", "start_ms": 0, "duration_ms": 180000, "parameters": {"additional_latency_ms": 1800}},
+    {"id": "fault-remote-id-claim", "type": "spoofed_identity", "target": "remote-id-04", "start_ms": 45000, "duration_ms": 60000, "parameters": {"claimed_identity": "authorized-uav-17", "confidence": 0.91}}
+  ],
+  "authority": {"id": "delegation-4660", "source": "airport_cuas_commander", "status": "bounded_pending", "scope": {"target_actor": "uas-4660", "effect": "shadow_only", "geographic_envelope": "lfbd-approach-sector"}, "valid_from_ms": 30000, "valid_until_ms": 150000, "constraints": ["no_effect_when_civil_conflict", "require_two_source_localization", "no_autonomous_defeat"]},
+  "expected_outcome": {"final_state": "surveillance_uncertain_authority_inhibited", "assertions": ["Track remains selected but marked evidence-conflicted.", "Remote-ID identity is not accepted as sufficient identification.", "Any effect is inhibited while localization and civil separation remain unresolved.", "The operator can inspect source provenance and uncertainty."]}
+}

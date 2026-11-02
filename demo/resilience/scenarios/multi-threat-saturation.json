@@ -1,0 +1,30 @@
+{
+  "schema": "furia.cuas.resilience-scenario",
+  "version": "1.0.0",
+  "id": "multi-threat-saturation",
+  "title": "Multi-threat and interceptor saturation",
+  "purpose": "Exercise prioritization, resource contention, and bounded posture when several UAS tracks compete for limited response capacity.",
+  "seed": 4104,
+  "duration_ms": 240000,
+  "actors": [
+    {"id": "uas-5001", "kind": "uas", "classification": "non_cooperative", "state": {"position": {"x_m": 1800, "y_m": -1200, "z_m": 100}, "velocity": {"x_m": -15, "y_m": 4, "z_m": 0}, "uncertainty": {"x_m": 70, "y_m": 70, "z_m": 20}}},
+    {"id": "uas-5002", "kind": "uas", "classification": "unknown", "state": {"position": {"x_m": 1500, "y_m": 900, "z_m": 120}, "velocity": {"x_m": -13, "y_m": -3, "z_m": 0}, "uncertainty": {"x_m": 80, "y_m": 80, "z_m": 25}}},
+    {"id": "uas-5003", "kind": "uas", "classification": "non_cooperative", "state": {"position": {"x_m": -1000, "y_m": 1100, "z_m": 80}, "velocity": {"x_m": 12, "y_m": -8, "z_m": 0}, "uncertainty": {"x_m": 65, "y_m": 65, "z_m": 20}}},
+    {"id": "uas-5004", "kind": "uas", "classification": "unknown", "state": {"position": {"x_m": -1500, "y_m": -900, "z_m": 140}, "velocity": {"x_m": 16, "y_m": 6, "z_m": 0}, "uncertainty": {"x_m": 90, "y_m": 90, "z_m": 30}}},
+    {"id": "uas-5005", "kind": "uas", "classification": "non_cooperative", "state": {"position": {"x_m": 500, "y_m": 1800, "z_m": 110}, "velocity": {"x_m": -4, "y_m": -18, "z_m": 0}, "uncertainty": {"x_m": 75, "y_m": 75, "z_m": 25}}},
+    {"id": "interceptor-s1", "kind": "interceptor", "classification": "available", "state": {"position": {"x_m": -300, "y_m": 0, "z_m": 80}, "velocity": {"x_m": 0, "y_m": 0, "z_m": 0}, "uncertainty": {"x_m": 10, "y_m": 10, "z_m": 10}}},
+    {"id": "interceptor-s2", "kind": "interceptor", "classification": "tasking", "state": {"position": {"x_m": 300, "y_m": 0, "z_m": 80}, "velocity": {"x_m": 0, "y_m": 0, "z_m": 0}, "uncertainty": {"x_m": 10, "y_m": 10, "z_m": 10}}}
+  ],
+  "sensors": [
+    {"id": "radar-01", "kind": "radar", "health": "nominal", "latency_ms": 100, "observes": ["uas-5001", "uas-5002", "uas-5003", "uas-5004", "uas-5005"]},
+    {"id": "rf-02", "kind": "rf", "health": "degraded", "latency_ms": 700, "observes": ["uas-5001", "uas-5002", "uas-5003", "uas-5004", "uas-5005"]},
+    {"id": "eo-ir-05", "kind": "eo_ir", "health": "nominal", "latency_ms": 800, "observes": ["uas-5001", "uas-5002", "uas-5003", "uas-5004", "uas-5005"]}
+  ],
+  "faults": [
+    {"id": "fault-sensor-saturation", "type": "capacity_saturation", "target": "radar-01", "start_ms": 60000, "duration_ms": 120000, "parameters": {"max_concurrent_tracks": 3, "drop_policy": "lowest_risk_first"}},
+    {"id": "fault-interceptor-saturation", "type": "resource_saturation", "target": "interceptor-s2", "start_ms": 0, "duration_ms": 180000, "parameters": {"status": "tasking", "available_slots": 0}},
+    {"id": "fault-track-duplication", "type": "message_duplicate", "target": "network", "start_ms": 90000, "duration_ms": 30000, "parameters": {"duplicate_ratio": 0.5, "deduplicate_by": "track_id_and_sequence"}}
+  ],
+  "authority": {"id": "delegation-5001", "source": "airport_cuas_commander", "status": "bounded", "scope": {"target_actor": "uas-5001", "effect": "shadow_only", "geographic_envelope": "lfbd-protected-volume"}, "valid_from_ms": 10000, "valid_until_ms": 220000, "constraints": ["one_effect_per_interceptor", "prioritize_lowest_time_to_conflict", "no_autonomous_defeat"]},
+  "expected_outcome": {"final_state": "prioritized_multi_threat_degraded", "assertions": ["All observed tracks retain stable identities despite duplicate messages.", "The system exposes sensor and interceptor saturation.", "Only authorized resources are assigned and no resource is double-booked.", "Prioritization is explainable using time-to-conflict and risk."]}
+}
