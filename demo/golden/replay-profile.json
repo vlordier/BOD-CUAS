@@ -1,0 +1,16 @@
+{
+  "schema": "bod-cuas.replay-profile",
+  "version": "1.0.0",
+  "scenario_id": "bod-cuas-golden",
+  "airport_pack_manifest": "airport-packs/lfbd/manifest.json",
+  "airport": {
+    "icao": "LFBD",
+    "name": "Bordeaux-Merignac",
+    "active_runway": "05/23",
+    "affected_sector": "RWY23 approach"
+  },
+  "protected_volume_id": "approach-rwy23",
+  "civil_flight_id": "AFR762",
+  "safety_policy_id": "BOD-RWY-FRATRICIDE-003",
+  "provenance": "synthetic_training_only"
+}

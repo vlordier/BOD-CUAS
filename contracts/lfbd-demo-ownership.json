@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema": "bod-cuas.lfbd-demo-ownership",
+  "version": "1.0.0",
+  "airport_icao": "LFBD",
+  "owner_repository": "BOD-CUAS",
+  "purpose": "Authoritative inventory of Bordeaux-specific demo scenarios, stories, fixtures, profiles and derived visual context.",
+  "authority": "training_only",
+  "provenance_policy": {
+    "required_for_runtime_data": ["source", "source_kind", "status", "reviewed_at"],
+    "allowed_status": ["synthetic", "historical_open_context", "derived_screening", "cached_external_context"],
+    "forbidden_claims": ["live_atc", "operational_navigation", "effect_authorization", "civil_aviation_certification"]
+  },
+  "owned": {
+    "profiles": [
+      "demo/golden/lfbd-operator-profile.json",
+      "demo/golden/replay-profile.json"
+    ],
+    "scenarios": [
+      "demo/golden/airport-packs/lfbd/scenarios.json",
+      "demo/live-context/hybrid-demo-scenario.json",
+      "demo/golden/timeline.yaml",
+      "demo/golden/threat-origin.yaml",
+      "demo/resilience/scenarios/*.json"
+    ],
+    "stories": [],
+    "fixtures": [
+      "demo/golden/operational-context.json",
+      "demo/golden/asterix_records.json",
+      "demo/golden/protected-volumes.yaml",
+      "demo/live-context/samples/*.jsonl",
+      "demo/live-context/*.example.json",
+      "demo/live-context/context-sources.example.json",
+      "demo/live-context/static-context-source.example.json",
+      "demo/golden/airport-packs/lfbd/*.json",
+      "demo/golden/integration-manifest.json"
+    ],
+    "geospatial_assets": [
+      "data/geospatial/lfbd/**",
+      "data/lfbd/**"
+    ],
+    "provider_catalogues": [
+      "data/geospatial/lfbd/source-catalog.json",
+      "data/geospatial/lfbd/lfbd-sensor-network.json",
+      "demo/live-context/source-catalog.json"
+    ],
+    "import_and_validation_tools": [
+      "scripts/**",
+      "tools/geodata/**"
+    ]
+  },
+  "not_owned_here": {
+    "generic_primitives": ["furia-core", "furia-cuas", "furia-ui"],
+    "host_composition": ["furia-c2"],
+    "raw_unreviewed_sources": ["perte_nat/bordeaux-cuas-planning"],
+    "certification_evidence": ["external_authority_process"]
+  },
+  "story_policy": "No Storybook stories are currently owned by this repository. LFBD stories must be added under demo/stories/lfbd and registered here before use; generic component stories remain in furia-ui.",
+  "consumers": [
+    "furia-c2 airport-profile adapter",
+    "BOD-CUAS deterministic replay and acceptance tooling"
+  ]
+}

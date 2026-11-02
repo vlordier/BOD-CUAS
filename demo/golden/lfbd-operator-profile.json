@@ -1,0 +1,71 @@
+{
+  "schema": "bod-cuas.airport-operational-profile",
+  "version": "1.0.0",
+  "id": "lfbd-demo",
+  "icao": "LFBD",
+  "iata": "BOD",
+  "name": "Aéroport de Bordeaux-Mérignac",
+  "airportContext": {
+    "activeRunway": "05/23",
+    "affectedSector": "approche nord",
+    "operationalMode": "training_replay",
+    "liveAuthorityConnected": false
+  },
+  "bounds": {
+    "minLat": 44.809034511,
+    "maxLat": 44.856124185,
+    "minLon": -0.741191,
+    "maxLon": -0.672603084
+  },
+  "landmarkFeatureIds": ["runway-05-23", "runway-11-29", "terminal-apron"],
+  "noFlyZones": [
+    { "featureId": "runway-05-23-core-demo", "type": "restricted", "label": "RUNWAY PROTECTED VOLUME" },
+    { "featureId": "approach-rwy23-demo", "type": "warning", "label": "RWY23 APPROACH CONTEXT" },
+    { "featureId": "apron-critical-demo", "type": "restricted", "label": "APRON PROTECTED VOLUME" }
+  ],
+  "sensorSites": [
+    { "featureId": "rf-sensor-01" },
+    { "featureId": "rf-sensor-02" },
+    { "featureId": "rf-sensor-03" },
+    { "featureId": "acoustic-array-01" },
+    { "id": "airport-radar-01", "label": "Radar primaire aéroport", "lat": 44.8294, "lon": -0.7012, "kind": "radar_sensor_site" },
+    { "id": "eo-ir-ptz-02", "label": "Caméra EO/IR PTZ", "lat": 44.8341, "lon": -0.7164, "kind": "eo_ir_sensor_site" },
+    { "id": "remote-id-01", "label": "Récepteur Remote ID", "lat": 44.8258, "lon": -0.7088, "kind": "remote_id_sensor_site" }
+  ],
+  "replaySymbols": [
+    { "id": "7001", "label": "7001 · AUTH", "lat": 44.84, "lon": -0.71, "affiliation": "Friend", "domain": "UAV", "headingDeg": 90 },
+    { "id": "7002", "label": "7002 · UNKNOWN", "lat": 44.85, "lon": -0.72, "affiliation": "Unknown", "domain": "UAV", "headingDeg": 90 },
+    { "id": "7003", "label": "7003 · EXPIRED", "lat": 44.83, "lon": -0.7, "affiliation": "Hostile", "domain": "UAV", "headingDeg": 90 },
+    { "id": "4660", "label": "4660 · NON-COOP", "lat": 44.85, "lon": -0.7, "affiliation": "Hostile", "domain": "UAV", "headingDeg": 345, "selected": true }
+  ],
+  "scenario": {
+    "civilConflictTrack": { "id": "AFR762", "label": "AFR762 · CIVIL ARRIVAL", "lat": 44.842, "lon": -0.704, "headingDeg": 230, "altitudeM": 165 },
+    "interceptVector": { "from": { "lat": 44.84, "lon": -0.71 }, "to": { "lat": 44.85, "lon": -0.7 } },
+    "safetyZones": [
+      { "id": "runway-safety", "lat": 44.837, "lon": -0.714, "radiusM": 310, "minAltitudeM": 0, "maxAltitudeM": 260, "state": "prohibited", "reason": "Piste et approche civile active" },
+      { "id": "terminal-buffer", "lat": 44.828, "lon": -0.718, "radiusM": 220, "minAltitudeM": 0, "maxAltitudeM": 180, "state": "conditional", "reason": "Zone terminale · coordination requise" },
+      { "id": "north-intercept-box", "lat": 44.846, "lon": -0.704, "radiusM": 340, "minAltitudeM": 40, "maxAltitudeM": 520, "state": "allowed", "reason": "Volume d’interception d’entraînement" }
+    ],
+    "interceptor": { "id": "Moyen de réponse 01", "lat": 44.818, "lon": -0.731, "altitudeM": 35, "maxRangeM": 1250, "maxAltitudeM": 420, "minAltitudeM": 20, "targetClasses": ["micro", "small"] },
+    "weather": { "visibilityM": 8000, "windKt": 14, "precipitation": "none" },
+    "environment": { "sunAzimuthDeg": 226, "sunElevationDeg": 31, "cloudCover": 0.58, "windDirectionDeg": 274, "windKt": 14, "vegetationDensity": 0.34, "buildingDensity": 0.48, "lightLevel": "day" }
+  },
+  "assets": {
+    "mapBackground": "/training-media/lfbd-ign-plan.png",
+    "world3d": {
+      "assetBaseUrl": "/lfbd-bati3d",
+      "groundImageUrl": "/training-media/lfbd-ign-orthophoto.jpg",
+      "terrainGridUrl": "/data/geospatial/lfbd/terrain-grid-mnt2023.json",
+      "contextLabel": "Bati3D 2012 · contexte historique",
+      "buildingFocuses": [
+        { "id": "terminal-apron", "label": "Détail terminal", "center": { "lat": 44.8288, "lon": -0.7162 }, "radiusM": 220 }
+      ],
+      "supplementalAsset": {
+        "url": "/lfbd-bati3d/x79y120.glb",
+        "visibleIn": "terminal",
+        "label": "Modèle Bati3D source · contexte historique",
+        "status": "validated_context"
+      }
+    }
+  }
+}

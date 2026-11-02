@@ -1,0 +1,12 @@
+{
+  "icao": "LFXX",
+  "iata": "XXX",
+  "name": "Aéroport de démonstration",
+  "country": "FR",
+  "reference_point": { "latitude": 45.0, "longitude": 1.0, "altitude_m": 120 },
+  "bounds": { "min_latitude": 44.98, "max_latitude": 45.02, "min_longitude": 0.98, "max_longitude": 1.02 },
+  "geodata": { "provenance": "replace with reviewed source references", "sources": [], "layers": ["terrain", "buildings", "runways"], "assets": {} },
+  "sensors": [{ "id": "radar-01", "modality": "radar", "position": { "latitude": 45.0, "longitude": 1.0, "altitude_m": 120 } }],
+  "interceptors": [],
+  "sectors": [{ "id": "airport", "label": "Airport context", "kind": "airfield", "protected_volume_ids": ["airport-context"] }]
+}
